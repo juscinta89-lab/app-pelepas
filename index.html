@@ -3,56 +3,103 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Photo Finish PWA</title>
+    <title>Sistem Photo Finish PWA</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-database-compat.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <style>
+        /* Garisan merah penamat maya */
+        .finish-line-overlay {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            left: 50%;
+            width: 4px;
+            background-color: rgba(255, 0, 0, 0.7);
+            transform: translateX(-50%);
+            z-index: 10;
+        }
+    </style>
 </head>
-<body class="bg-slate-900 text-white font-sans">
+<body class="bg-slate-900 text-white font-sans pb-10">
 
-    <div id="app" class="max-w-md mx-auto p-6">
-        <h1 class="text-2xl font-bold text-center mb-6 text-yellow-400">⚡ SPRINT TIMER PWA</h1>
+    <div id="app" class="max-w-md mx-auto p-4">
+        <h1 class="text-2xl font-bold text-center mb-6 text-yellow-400 mt-4">⚡ SPRINT TIMER PRO</h1>
 
         <div id="mode-selector" class="flex gap-4 mb-8">
-            <button onclick="setMode('starter')" class="flex-1 bg-blue-600 p-4 rounded-lg font-bold">MODE STARTER</button>
-            <button onclick="setMode('finish')" class="flex-1 bg-green-600 p-4 rounded-lg font-bold">MODE FINISH</button>
+            <button onclick="setMode('starter')" class="flex-1 bg-blue-600 p-4 rounded-lg font-bold hover:bg-blue-500 shadow-lg">MOD STARTER</button>
+            <button onclick="setMode('finish')" class="flex-1 bg-green-600 p-4 rounded-lg font-bold hover:bg-green-500 shadow-lg">MOD FINISH</button>
         </div>
 
         <div id="section-starter" class="hidden text-center">
-            <div class="bg-slate-800 p-8 rounded-2xl border-2 border-blue-500">
-                <p class="mb-4">Status: <span id="starter-status" class="text-red-400">Sedia</span></p>
-                <button id="arm-btn" class="w-full bg-red-500 hover:bg-red-600 p-6 rounded-full text-2xl font-black shadow-lg transition-transform active:scale-95">
-                    ARMED / SEDIA
+            <div class="bg-slate-800 p-6 rounded-2xl border-2 border-blue-500 shadow-xl">
+                <h2 class="text-xl font-bold mb-2 border-b border-slate-600 pb-2">Unit Pelepas</h2>
+                <p class="mb-4 text-lg">Status: <span id="starter-status" class="text-yellow-400 font-bold">Menunggu</span></p>
+                
+                <button id="arm-btn" class="w-full bg-red-500 hover:bg-red-600 p-6 rounded-xl text-2xl font-black shadow-lg transition-transform active:scale-95 mb-4">
+                    SEDIA (ARM)
                 </button>
-                <p class="mt-4 text-xs opacity-50">Sambung AUX/Mic. App akan trigger pada bunyi kuat.</p>
+                
+                <button id="reset-btn" class="w-full bg-slate-600 hover:bg-slate-500 p-4 rounded-xl font-bold shadow-lg mt-2 transition-colors">
+                    🔄 RESET SISTEM & MASA
+                </button>
+
+                <div class="mt-6 bg-slate-700 p-4 rounded-xl border border-slate-500 text-left">
+                    <label for="threshold-slider" class="block text-sm font-bold mb-2 text-yellow-300">
+                        🎚️ Sensitiviti Mic (Threshold): <span id="threshold-val" class="text-white">70</span>
+                    </label>
+                    <input type="range" id="threshold-slider" min="10" max="150" value="70" class="w-full accent-yellow-400">
+                    <p class="text-xs mt-2 opacity-70">Ubah nilai ini berdasarkan bunyi bising di padang. Makin tinggi nilai, makin kuat bunyi pistol diperlukan.</p>
+                </div>
             </div>
         </div>
 
         <div id="section-finish" class="hidden">
-            <div class="bg-slate-800 p-4 rounded-xl mb-4">
-                <div id="stopwatch" class="text-5xl font-mono text-center py-4 text-yellow-300">00:00.00</div>
-                <video id="webcam" autoplay playsinline class="w-full rounded-lg bg-black mb-4"></video>
-                <button onclick="captureFinish()" class="w-full bg-yellow-500 text-black font-bold p-4 rounded-lg">CATAT PELARI</button>
+            <div class="bg-slate-800 p-4 rounded-xl mb-4 shadow-xl border-2 border-green-600">
+                <div id="stopwatch" class="text-6xl font-mono text-center py-2 text-yellow-300 tracking-wider">00:00.00</div>
+                
+                <div class="relative mb-4 overflow-hidden rounded-lg border-2 border-slate-700">
+                    <video id="webcam" autoplay playsinline class="w-full bg-black object-cover"></video>
+                    <div class="finish-line-overlay"></div> </div>
+
+                <div class="grid grid-cols-2 gap-3 mb-4">
+                    <button id="auto-btn" onclick="toggleAutoCapture()" class="bg-purple-600 hover:bg-purple-500 font-bold p-3 rounded-lg text-sm transition-colors shadow">
+                        📷 AUTO: OFF
+                    </button>
+                    <button onclick="captureFinish()" class="bg-yellow-500 text-black hover:bg-yellow-400 font-bold p-3 rounded-lg text-sm shadow">
+                        📸 SNAP MANUAL
+                    </button>
+                </div>
+                
+                <button id="stop-btn" onclick="stopRace()" class="w-full bg-red-600 hover:bg-red-500 font-bold p-3 rounded-lg shadow transition-colors">
+                    🛑 STOP JAM & AUTO
+                </button>
             </div>
 
-            <table class="w-full text-left text-sm">
-                <thead>
-                    <tr class="border-b border-slate-700">
-                        <th class="py-2">Pos</th>
-                        <th>Masa</th>
-                        <th>Imej</th>
-                    </tr>
-                </thead>
-                <tbody id="results-table"></tbody>
-            </table>
-            <button onclick="exportPDF()" class="w-full mt-6 bg-slate-100 text-black p-2 rounded">Export PDF</button>
+            <div class="bg-slate-800 rounded-xl p-4 shadow-xl">
+                <h3 class="font-bold mb-3 border-b border-slate-600 pb-2 text-lg text-green-400">Keputusan Rasmi</h3>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-sm whitespace-nowrap">
+                        <thead>
+                            <tr class="text-slate-400">
+                                <th class="py-2 px-2">Pos</th>
+                                <th>Masa</th>
+                                <th>Imej (Photo Finish)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="results-table"></tbody>
+                    </table>
+                </div>
+                <button onclick="exportPDF()" class="w-full mt-6 bg-white text-black font-bold p-3 rounded-lg hover:bg-slate-200 transition-colors">📄 Muat Turun PDF</button>
+            </div>
         </div>
     </div>
 
     <script>
         // --- KONFIGURASI FIREBASE ---
-    const firebaseConfig = {
+        // PENTING: Gantikan dengan maklumat dari Firebase Console anda
+        const firebaseConfig = {
   apiKey: "AIzaSyB6cOX9OoM6-Z2r7svyGUaMC7SzwJzpF5Q",
   authDomain: "sprint-timer-v2.firebaseapp.com",
   databaseURL: "https://sprint-timer-v2-default-rtdb.asia-southeast1.firebasedatabase.app",
@@ -62,15 +109,27 @@
   appId: "1:490693241804:web:264ae3d32f2df78a9f8b69",
   measurementId: "G-PMT4YC1GNW"
 };
-        firebase.initializeApp(firebaseConfig);
+        // Initialize Firebase
+        if (!firebase.apps.length) {
+            firebase.initializeApp(firebaseConfig);
+        }
         const db = firebase.database();
 
+        // --- PEMBOLEH UBAH GLOBAL ---
         let currentMode = '';
         let startTime = null;
         let isArmed = false;
         let results = [];
+        let stopwatchReqId;
+        let isRaceStopped = false;
 
-        // --- LOGIK MOD ---
+        // Auto-Capture Vars
+        let autoCaptureActive = false;
+        let previousPixels = null;
+        let captureCooldown = false;
+        let autoCaptureReqId;
+
+        // Logik Antara Muka (Tukar Mod)
         function setMode(mode) {
             currentMode = mode;
             document.getElementById('mode-selector').classList.add('hidden');
@@ -78,21 +137,58 @@
             if(mode === 'finish') initCamera();
         }
 
-        // --- LOGIK STARTER (MIC DETECTION) ---
+        // ==========================================
+        // FUNGSI MOD STARTER
+        // ==========================================
         const armBtn = document.getElementById('arm-btn');
+        let currentThreshold = 70; // Nilai lalai slider
+
+        // Update nilai threshold apabila slider digerakkan
+        document.getElementById('threshold-slider').addEventListener('input', (e) => {
+            currentThreshold = parseInt(e.target.value);
+            document.getElementById('threshold-val').innerText = currentThreshold;
+        });
+
+        // Butang Sedia (Arm) ditekan
         armBtn.addEventListener('click', async () => {
             isArmed = !isArmed;
-            armBtn.innerText = isArmed ? "LISTENING..." : "ARMED / SEDIA";
-            armBtn.classList.toggle('bg-green-500');
-            
             if(isArmed) {
+                armBtn.innerText = "🎤 LISTENING...";
+                armBtn.classList.replace('bg-red-500', 'bg-green-500');
+                document.getElementById('starter-status').innerText = "Sedia (Menanti Bunyi)";
+                document.getElementById('starter-status').classList.replace('text-yellow-400', 'text-green-400');
+                startAudioDetection();
+            } else {
+                armBtn.innerText = "SEDIA (ARM)";
+                armBtn.classList.replace('bg-green-500', 'bg-red-500');
+                document.getElementById('starter-status').innerText = "Dibatalkan";
+                document.getElementById('starter-status').classList.replace('text-green-400', 'text-yellow-400');
+            }
+        });
+
+        // Butang Reset ditekan
+        document.getElementById('reset-btn').addEventListener('click', () => {
+            if(confirm("Adakah anda pasti mahu reset sistem? Ini akan memadam masa mula di semua peranti.")) {
+                db.ref('race/start').remove(); // Padam data Firebase
+                alert("Sistem telah di-reset. Sedia untuk perlumbaan baru.");
+                document.getElementById('starter-status').innerText = "Menunggu";
+                document.getElementById('starter-status').classList.replace('text-green-400', 'text-yellow-400');
+                isArmed = false;
+                armBtn.innerText = "SEDIA (ARM)";
+                armBtn.classList.remove('bg-green-500', 'bg-slate-600');
+                armBtn.classList.add('bg-red-500');
+            }
+        });
+
+        // Logik Mengesan Bunyi Mic
+        async function startAudioDetection() {
+            try {
                 const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                const audioContext = new AudioContext();
+                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
                 const source = audioContext.createMediaStreamSource(stream);
                 const analyser = audioContext.createAnalyser();
                 analyser.fftSize = 256;
                 source.connect(analyser);
-
                 const dataArray = new Uint8Array(analyser.frequencyBinCount);
                 
                 function checkAudio() {
@@ -100,82 +196,239 @@
                     analyser.getByteFrequencyData(dataArray);
                     let volume = dataArray.reduce((a, b) => a + b) / dataArray.length;
                     
-                    if(volume > 60) { // Threshold bunyi (laraskan ikut kesesuaian)
-                        triggerStart();
+                    if(volume > currentThreshold) { 
+                        triggerStart(); // Hantar ke Firebase
                         isArmed = false;
+                        armBtn.innerText = "BAM! (Masa Berjalan)";
+                        armBtn.classList.replace('bg-green-500', 'bg-slate-600');
                     } else {
                         requestAnimationFrame(checkAudio);
                     }
                 }
                 checkAudio();
+            } catch (err) {
+                alert("Sila benarkan akses Mikrofon: " + err.message);
+                isArmed = false;
+                armBtn.innerText = "SEDIA (ARM)";
+                armBtn.classList.replace('bg-green-500', 'bg-red-500');
             }
-        });
+        }
 
+        // Hantar timestamp ke Firebase
         function triggerStart() {
             const now = Date.now();
             db.ref('race/start').set({
-                timestamp: now,
-                serverTime: firebase.database.ServerValue.TIMESTAMP
+                timestamp: now
             });
-            alert("BAM! Masa direkod.");
         }
 
-        // --- LOGIK FINISH LINE ---
+        // ==========================================
+        // FUNGSI MOD FINISH LINE
+        // ==========================================
+        
+        // Mulakan Kamera
         async function initCamera() {
-            const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
-            document.getElementById('webcam').srcObject = stream;
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { facingMode: 'environment', width: { ideal: 1280 } } 
+                });
+                const videoElement = document.getElementById('webcam');
+                videoElement.srcObject = stream;
+            } catch (err) {
+                alert("Sila benarkan akses Kamera: " + err.message);
+            }
         }
 
+        // Listener Firebase (Sync Masa Mula / Reset)
         db.ref('race/start').on('value', snapshot => {
             if(snapshot.val()) {
+                // Tembakan dilepaskan
                 startTime = snapshot.val().timestamp;
+                isRaceStopped = false;
+                cancelAnimationFrame(stopwatchReqId);
                 updateStopwatch();
+            } else {
+                // Sistem di-reset dari unit Starter
+                startTime = null;
+                isRaceStopped = true;
+                cancelAnimationFrame(stopwatchReqId);
+                document.getElementById('stopwatch').innerText = "00:00.00";
+                results = []; // Kosongkan keputusan
+                renderTable();
             }
         });
 
+        // Loop Jam Randik
         function updateStopwatch() {
-            if(!startTime) return;
+            if(!startTime || isRaceStopped) return;
             const diff = (Date.now() - startTime) / 1000;
-            document.getElementById('stopwatch').innerText = diff.toFixed(2);
-            requestAnimationFrame(updateStopwatch);
+            
+            // Format masa (MM:SS.ms)
+            const minutes = Math.floor(diff / 60).toString().padStart(2, '0');
+            const seconds = Math.floor(diff % 60).toString().padStart(2, '0');
+            const milliseconds = Math.floor((diff % 1) * 100).toString().padStart(2, '0');
+            
+            document.getElementById('stopwatch').innerText = diff < 60 
+                ? `${seconds}.${milliseconds}` // Bawah 1 minit: paparkan Saat.Ms sahaja
+                : `${minutes}:${seconds}.${milliseconds}`;
+                
+            stopwatchReqId = requestAnimationFrame(updateStopwatch);
         }
 
+        // Hentikan Jam
+        function stopRace() {
+            isRaceStopped = true;
+            cancelAnimationFrame(stopwatchReqId);
+            if(autoCaptureActive) toggleAutoCapture(); // Matikan auto jika aktif
+        }
+
+        // Tangkap Gambar (Digunakan oleh Manual & Auto)
         function captureFinish() {
+            if(!startTime) {
+                alert("Perlumbaan belum bermula!");
+                return;
+            }
+            
             const now = Date.now();
             const timeTaken = ((now - startTime) / 1000).toFixed(2);
             
-            // Capture Image
             const video = document.getElementById('webcam');
             const canvas = document.createElement('canvas');
             canvas.width = video.videoWidth;
             canvas.height = video.videoHeight;
-            canvas.getContext('2d').drawImage(video, 0, 0);
-            const imgData = canvas.toDataURL('image/jpeg');
+            const ctx = canvas.getContext('2d');
+            
+            // Lukis video ke canvas
+            ctx.drawImage(video, 0, 0);
+            
+            // Lukis garisan merah sebagai bukti photo finish
+            ctx.fillStyle = "rgba(255, 0, 0, 0.8)";
+            ctx.fillRect(canvas.width / 2 - 2, 0, 4, canvas.height);
 
+            // Convert ke imej data (kualiti 60% untuk elak berat sangat)
+            const imgData = canvas.toDataURL('image/jpeg', 0.6); 
+
+            // Simpan ke array
             results.push({ pos: results.length + 1, time: timeTaken, img: imgData });
             renderTable();
         }
 
+        // Togol Auto-Capture
+        function toggleAutoCapture() {
+            autoCaptureActive = !autoCaptureActive;
+            const btn = document.getElementById('auto-btn');
+            
+            if(autoCaptureActive) {
+                btn.innerText = "📷 AUTO: ON (Aktif)";
+                btn.classList.replace('bg-purple-600', 'bg-green-600');
+                previousPixels = null;
+                processVideoFrame();
+            } else {
+                btn.innerText = "📷 AUTO: OFF";
+                btn.classList.replace('bg-green-600', 'bg-purple-600');
+                cancelAnimationFrame(autoCaptureReqId);
+            }
+        }
+
+        // Logik Pengesanan Pergerakan di Garisan Merah
+        function processVideoFrame() {
+            if (!autoCaptureActive || isRaceStopped) return;
+
+            const video = document.getElementById('webcam');
+            if (video.videoWidth === 0) { 
+                autoCaptureReqId = requestAnimationFrame(processVideoFrame);
+                return;
+            }
+
+            // Gunakan willReadFrequently untuk optimumkan pembacaan piksel
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d', { willReadFrequently: true });
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            ctx.drawImage(video, 0, 0);
+
+            // Ambil sample pixel pada garisan tengah
+            const lineX = Math.floor(canvas.width / 2);
+            const imageData = ctx.getImageData(lineX, 0, 1, canvas.height);
+            const pixels = imageData.data;
+
+            if (previousPixels && !captureCooldown && startTime) {
+                let diffCount = 0;
+                for (let i = 0; i < pixels.length; i += 4) {
+                    const rDiff = Math.abs(pixels[i] - previousPixels[i]);
+                    const gDiff = Math.abs(pixels[i+1] - previousPixels[i+1]);
+                    const bDiff = Math.abs(pixels[i+2] - previousPixels[i+2]);
+
+                    if (rDiff + gDiff + bDiff > 120) { // Sensitiviti pergerakan warna
+                        diffCount++;
+                    }
+                }
+
+                // Jika > 10% garisan tertutup dengan objek berbeza
+                if (diffCount > (canvas.height * 0.10)) {
+                    captureFinish();
+                    captureCooldown = true; 
+                    // Cooldown 1 saat supaya tak ambil banyak gambar pelari yang sama
+                    setTimeout(() => { captureCooldown = false; }, 1000); 
+                }
+            }
+
+            previousPixels = new Uint8ClampedArray(pixels);
+            autoCaptureReqId = requestAnimationFrame(processVideoFrame);
+        }
+
+        // Render Jadual
         function renderTable() {
             const tbody = document.getElementById('results-table');
             tbody.innerHTML = results.map(r => `
-                <tr class="border-b border-slate-800">
-                    <td class="py-2">${r.pos}</td>
-                    <td class="font-mono">${r.time}s</td>
-                    <td><img src="${r.img}" class="h-10 w-auto rounded shadow-md"></td>
+                <tr class="border-b border-slate-700 bg-slate-800/80 hover:bg-slate-700">
+                    <td class="py-3 px-2 font-bold">${r.pos}</td>
+                    <td class="font-mono text-yellow-300 font-bold text-lg">${r.time}s</td>
+                    <td class="py-2"><img src="${r.img}" class="h-16 w-auto rounded border border-slate-500 shadow-sm cursor-pointer" onclick="window.open(this.src)"></td>
                 </tr>
             `).join('');
+            
+            // Scroll ke bawah automatik jika jadual penuh
+            const tableContainer = tbody.parentElement.parentElement;
+            tableContainer.scrollTop = tableContainer.scrollHeight;
         }
 
+        // Export PDF menggunakan jsPDF
         async function exportPDF() {
+            if(results.length === 0) return alert("Tiada keputusan untuk dimuat turun.");
+            
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF();
-            doc.text("KEPUTUSAN PERLUMBAAN", 10, 10);
+            
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(20);
+            doc.text("KEPUTUSAN RASMI LARIAN", 10, 20);
+            
+            doc.setFontSize(12);
+            doc.setFont("helvetica", "normal");
+            doc.text(`Tarikh: ${new Date().toLocaleString('ms-MY')}`, 10, 30);
+            
+            let yPos = 45;
+            
             results.forEach((r, i) => {
-                doc.text(`${r.pos}. Masa: ${r.time}s`, 10, 20 + (i * 40));
-                doc.addImage(r.img, 'JPEG', 50, 15 + (i * 40), 30, 20);
+                // Tambah muka surat baru jika penuh
+                if (yPos > 250) {
+                    doc.addPage();
+                    yPos = 20;
+                }
+                
+                doc.setFont("helvetica", "bold");
+                doc.text(`Tempat Ke-${r.pos}`, 10, yPos);
+                doc.setFont("helvetica", "normal");
+                doc.text(`Masa: ${r.time} saat`, 10, yPos + 6);
+                
+                // Masukkan Imej (Format JPEG)
+                doc.addImage(r.img, 'JPEG', 60, yPos - 5, 80, 45); // Lebar 80, Tinggi 45
+                
+                yPos += 55; // Jarak untuk peserta seterusnya
             });
-            doc.save("keputusan.pdf");
+            
+            doc.save(`Keputusan_Larian_${Date.now()}.pdf`);
         }
     </script>
 </body>
