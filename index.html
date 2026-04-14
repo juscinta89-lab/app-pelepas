@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="ms">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Photo Finish PWA</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-database-compat.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+</head>
+<body class="bg-slate-900 text-white font-sans">
+
+    <div id="app" class="max-w-md mx-auto p-6">
+        <h1 class="text-2xl font-bold text-center mb-6 text-yellow-400">⚡ SPRINT TIMER PWA</h1>
+
+        <div id="mode-selector" class="flex gap-4 mb-8">
+            <button onclick="setMode('starter')" class="flex-1 bg-blue-600 p-4 rounded-lg font-bold">MODE STARTER</button>
+            <button onclick="setMode('finish')" class="flex-1 bg-green-600 p-4 rounded-lg font-bold">MODE FINISH</button>
+        </div>
+
+        <div id="section-starter" class="hidden text-center">
+            <div class="bg-slate-800 p-8 rounded-2xl border-2 border-blue-500">
+                <p class="mb-4">Status: <span id="starter-status" class="text-red-400">Sedia</span></p>
+                <button id="arm-btn" class="w-full bg-red-500 hover:bg-red-600 p-6 rounded-full text-2xl font-black shadow-lg transition-transform active:scale-95">
+                    ARMED / SEDIA
+                </button>
+                <p class="mt-4 text-xs opacity-50">Sambung AUX/Mic. App akan trigger pada bunyi kuat.</p>
+            </div>
+        </div>
+
+        <div id="section-finish" class="hidden">
+            <div class="bg-slate-800 p-4 rounded-xl mb-4">
+                <div id="stopwatch" class="text-5xl font-mono text-center py-4 text-yellow-300">00:00.00</div>
+                <video id="webcam" autoplay playsinline class="w-full rounded-lg bg-black mb-4"></video>
+                <button onclick="captureFinish()" class="w-full bg-yellow-500 text-black font-bold p-4 rounded-lg">CATAT PELARI</button>
+            </div>
+
+            <table class="w-full text-left text-sm">
+                <thead>
+                    <tr class="border-b border-slate-700">
+                        <th class="py-2">Pos</th>
+                        <th>Masa</th>
+                        <th>Imej</th>
+                    </tr>
+                </thead>
+                <tbody id="results-table"></tbody>
+            </table>
+            <button onclick="exportPDF()" class="w-full mt-6 bg-slate-100 text-black p-2 rounded">Export PDF</button>
+        </div>
+    </div>
+
+    <script>
+        // --- KONFIGURASI FIREBASE ---
+    const firebaseConfig = {
+  apiKey: "AIzaSyB6cOX9OoM6-Z2r7svyGUaMC7SzwJzpF5Q",
+  authDomain: "sprint-timer-v2.firebaseapp.com",
+  databaseURL: "https://sprint-timer-v2-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "sprint-timer-v2",
+  storageBucket: "sprint-timer-v2.firebasestorage.app",
+  messagingSenderId: "490693241804",
+  appId: "1:490693241804:web:264ae3d32f2df78a9f8b69",
+  measurementId: "G-PMT4YC1GNW"
+};
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.database();
+
+        let currentMode = '';
+        let startTime = null;
+        let isArmed = false;
+        let results = [];
+
+        // --- LOGIK MOD ---
+        function setMode(mode) {
+            currentMode = mode;
+            document.getElementById('mode-selector').classList.add('hidden');
+            document.getElementById(`section-${mode}`).classList.remove('hidden');
+            if(mode === 'finish') initCamera();
+        }
+
+        // --- LOGIK STARTER (MIC DETECTION) ---
+        const armBtn = document.getElementById('arm-btn');
+        armBtn.addEventListener('click', async () => {
+            isArmed = !isArmed;
+            armBtn.innerText = isArmed ? "LISTENING..." : "ARMED / SEDIA";
+            armBtn.classList.toggle('bg-green-500');
+            
+            if(isArmed) {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                const audioContext = new AudioContext();
+                const source = audioContext.createMediaStreamSource(stream);
+                const analyser = audioContext.createAnalyser();
+                analyser.fftSize = 256;
+                source.connect(analyser);
+
+                const dataArray = new Uint8Array(analyser.frequencyBinCount);
+                
+                function checkAudio() {
+                    if(!isArmed) return;
+                    analyser.getByteFrequencyData(dataArray);
+                    let volume = dataArray.reduce((a, b) => a + b) / dataArray.length;
+                    
+                    if(volume > 60) { // Threshold bunyi (laraskan ikut kesesuaian)
+                        triggerStart();
+                        isArmed = false;
+                    } else {
+                        requestAnimationFrame(checkAudio);
+                    }
+                }
+                checkAudio();
+            }
+        });
+
+        function triggerStart() {
+            const now = Date.now();
+            db.ref('race/start').set({
+                timestamp: now,
+                serverTime: firebase.database.ServerValue.TIMESTAMP
+            });
+            alert("BAM! Masa direkod.");
+        }
+
+        // --- LOGIK FINISH LINE ---
+        async function initCamera() {
+            const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+            document.getElementById('webcam').srcObject = stream;
+        }
+
+        db.ref('race/start').on('value', snapshot => {
+            if(snapshot.val()) {
+                startTime = snapshot.val().timestamp;
+                updateStopwatch();
+            }
+        });
+
+        function updateStopwatch() {
+            if(!startTime) return;
+            const diff = (Date.now() - startTime) / 1000;
+            document.getElementById('stopwatch').innerText = diff.toFixed(2);
+            requestAnimationFrame(updateStopwatch);
+        }
+
+        function captureFinish() {
+            const now = Date.now();
+            const timeTaken = ((now - startTime) / 1000).toFixed(2);
+            
+            // Capture Image
+            const video = document.getElementById('webcam');
+            const canvas = document.createElement('canvas');
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            canvas.getContext('2d').drawImage(video, 0, 0);
+            const imgData = canvas.toDataURL('image/jpeg');
+
+            results.push({ pos: results.length + 1, time: timeTaken, img: imgData });
+            renderTable();
+        }
+
+        function renderTable() {
+            const tbody = document.getElementById('results-table');
+            tbody.innerHTML = results.map(r => `
+                <tr class="border-b border-slate-800">
+                    <td class="py-2">${r.pos}</td>
+                    <td class="font-mono">${r.time}s</td>
+                    <td><img src="${r.img}" class="h-10 w-auto rounded shadow-md"></td>
+                </tr>
+            `).join('');
+        }
+
+        async function exportPDF() {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+            doc.text("KEPUTUSAN PERLUMBAAN", 10, 10);
+            results.forEach((r, i) => {
+                doc.text(`${r.pos}. Masa: ${r.time}s`, 10, 20 + (i * 40));
+                doc.addImage(r.img, 'JPEG', 50, 15 + (i * 40), 30, 20);
+            });
+            doc.save("keputusan.pdf");
+        }
+    </script>
+</body>
+</html>
