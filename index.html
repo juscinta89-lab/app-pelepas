@@ -109,7 +109,7 @@
     <script>
         // --- 1. KONFIGURASI FIREBASE ---
         // PENTING: GANTIKAN DENGAN MAKLUMAT DARI FIREBASE CONSOLE ANDA
-const firebaseConfig = {
+    const firebaseConfig = {
   apiKey: "AIzaSyB6cOX9OoM6-Z2r7svyGUaMC7SzwJzpF5Q",
   authDomain: "sprint-timer-v2.firebaseapp.com",
   databaseURL: "https://sprint-timer-v2-default-rtdb.asia-southeast1.firebasedatabase.app",
@@ -133,6 +133,7 @@ const firebaseConfig = {
         let results = [];
         let stopwatchReqId;
         let isRaceStopped = false;
+        let serverOffset = 0; // Pembolehubah untuk membaiki clock skew
 
         // Auto-Capture Vars
         let autoCaptureActive = false;
@@ -140,7 +141,12 @@ const firebaseConfig = {
         let captureCooldown = false;
         let autoCaptureReqId;
 
-        // --- 3. KAWALAN UI UTAMA ---
+        // --- 3. DAPATKAN OFFSET MASA PELAYAN FIREBASE ---
+        db.ref('.info/serverTimeOffset').on('value', function(snapshot) {
+            serverOffset = snapshot.val() || 0;
+        });
+
+        // --- 4. KAWALAN UI UTAMA ---
         function setMode(mode) {
             currentMode = mode;
             document.getElementById('mode-selector').classList.add('hidden');
@@ -284,7 +290,13 @@ const firebaseConfig = {
         // Jam Randik
         function updateStopwatch() {
             if(!startTime || isRaceStopped) return;
-            const diff = (Date.now() - startTime) / 1000;
+            
+            // Gunakan masa pelayan sebenar dengan menambah offset
+            const currentServerTime = Date.now() + serverOffset;
+            let diff = (currentServerTime - startTime) / 1000;
+            
+            // Halang jam dari menunjukkan masa negatif akibat sedikit lag rangkaian
+            if(diff < 0) diff = 0;
             
             const minutes = Math.floor(diff / 60).toString().padStart(2, '0');
             const seconds = Math.floor(diff % 60).toString().padStart(2, '0');
@@ -307,7 +319,11 @@ const firebaseConfig = {
         function captureFinish() {
             if(!startTime) return alert("Perlumbaan belum bermula!");
             
-            const diff = (Date.now() - startTime) / 1000;
+            // Gunakan masa pelayan sebenar dengan menambah offset
+            const currentServerTime = Date.now() + serverOffset;
+            let diff = (currentServerTime - startTime) / 1000;
+            if(diff < 0) diff = 0;
+            
             const timeTaken = diff.toFixed(2);
             
             const video = document.getElementById('webcam');
