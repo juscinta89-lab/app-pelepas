@@ -28,11 +28,15 @@
             backdrop-filter: blur(10px);
             border: 1px solid rgba(255, 255, 255, 0.1);
         }
+        /* Memastikan transisi saiz kontena nampak lancar */
+        #main-container {
+            transition: max-width 0.4s ease-in-out;
+        }
     </style>
 </head>
 <body class="bg-slate-900 text-white font-sans pb-10 min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
 
-    <div id="app" class="max-w-md mx-auto p-4">
+    <div id="main-container" class="max-w-md mx-auto p-4">
         
         <div class="text-center mb-8 mt-6 relative">
             <button onclick="location.reload()" id="btn-change-room" class="hidden absolute top-0 left-0 bg-slate-800 text-slate-300 border border-slate-600 text-[10px] px-2 py-1 rounded hover:bg-slate-700 transition shadow-sm z-20">
@@ -120,9 +124,16 @@
 
         <div id="section-finish" class="hidden transition-opacity duration-300">
             <div class="glass-panel p-5 rounded-3xl mb-5 shadow-2xl relative">
-                <div class="absolute top-0 right-0 bg-red-600 text-white text-[10px] font-bold px-2 py-1 rounded-bl-lg rounded-tr-3xl tracking-wider hidden" id="live-indicator">LIVE REC</div>
                 
-                <div id="stopwatch" class="text-7xl font-black text-center py-2 text-transparent bg-clip-text bg-gradient-to-b from-white to-slate-400 tracking-wider font-mono shadow-sm">00:00<span class="text-4xl text-yellow-400">.00</span></div>
+                <div class="flex justify-end mb-2">
+                    <button onclick="toggleFullScreen()" class="bg-slate-800 hover:bg-slate-700 text-xs px-3 py-1.5 rounded-lg font-bold flex items-center gap-2 transition-colors border border-slate-600 shadow-sm text-slate-300">
+                        <span class="text-sm">🖥️</span> <span id="fs-btn-text">Paparan Penuh Desktop</span>
+                    </button>
+                </div>
+
+                <div class="absolute top-0 left-0 bg-red-600 text-white text-[10px] font-bold px-3 py-1 rounded-br-lg rounded-tl-3xl tracking-wider hidden z-20" id="live-indicator">LIVE REC</div>
+                
+                <div id="stopwatch" class="text-7xl md:text-8xl font-black text-center py-2 text-transparent bg-clip-text bg-gradient-to-b from-white to-slate-400 tracking-wider font-mono shadow-sm">00:00<span class="text-4xl md:text-5xl text-yellow-400">.00</span></div>
                 
                 <div class="relative mb-5 mt-2 overflow-hidden rounded-2xl border border-slate-600 bg-black shadow-inner">
                     <video id="webcam" autoplay playsinline class="w-full object-cover aspect-video"></video>
@@ -153,7 +164,7 @@
                     <span id="result-count" class="text-sm bg-emerald-500/20 text-emerald-300 px-3 py-1 rounded-full font-bold border border-emerald-500/30">0</span>
                 </div>
                 
-                <div class="overflow-x-auto no-scrollbar max-h-64 overflow-y-auto rounded-xl border border-slate-700 bg-slate-900/50 mb-4">
+                <div class="overflow-x-auto no-scrollbar max-h-64 md:max-h-96 overflow-y-auto rounded-xl border border-slate-700 bg-slate-900/50 mb-4">
                     <table class="w-full text-left text-sm whitespace-nowrap">
                         <thead class="sticky top-0 bg-slate-800 z-10 shadow-sm">
                             <tr class="text-slate-400 text-xs uppercase tracking-wider">
@@ -173,7 +184,7 @@
                         </div>
                 </div>
                 
-                <button onclick="exportPDF()" class="w-full bg-white text-slate-900 font-black p-4 rounded-xl hover:bg-slate-200 transition-colors shadow-lg shadow-white/10 flex justify-center items-center gap-2">
+                <button onclick="exportPDF()" class="w-full bg-white text-slate-900 font-black p-4 rounded-xl hover:bg-slate-200 transition-colors shadow-lg shadow-white/10 flex justify-center items-center gap-2 md:text-lg">
                     📄 MUAT TURUN PDF RASMI
                 </button>
             </div>
@@ -205,7 +216,7 @@
         let isArmed = false;
         let results = [];
         let stopwatchReqId;
-        let isRaceStopped = true; // Set awal kepada true supaya tidak ralat
+        let isRaceStopped = true; 
         let serverOffset = 0; 
         let firebaseListener = null;
 
@@ -223,6 +234,37 @@
         // --- 3. OFFSET MASA PELAYAN ---
         db.ref('.info/serverTimeOffset').on('value', function(snapshot) {
             serverOffset = snapshot.val() || 0;
+        });
+
+        // --- FUNGSI FULLSCREEN ---
+        function toggleFullScreen() {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen().catch(err => {
+                    alert(`Gagal masuk mod skrin penuh: ${err.message}`);
+                });
+            } else {
+                if (document.exitFullscreen) {
+                    document.exitFullscreen();
+                }
+            }
+        }
+
+        // Dengar perubahan skrin penuh untuk kembangkan UI
+        document.addEventListener('fullscreenchange', () => {
+            const container = document.getElementById('main-container');
+            const fsBtnText = document.getElementById('fs-btn-text');
+            
+            if (document.fullscreenElement) {
+                // Skrin Penuh - Kembangkan lebar
+                container.classList.remove('max-w-md');
+                container.classList.add('max-w-6xl');
+                fsBtnText.innerText = "Keluar Paparan Penuh";
+            } else {
+                // Skrin Biasa - Saiz telefon
+                container.classList.add('max-w-md');
+                container.classList.remove('max-w-6xl');
+                fsBtnText.innerText = "Paparan Penuh Desktop";
+            }
         });
 
         // --- 4. KAWALAN UI & ROOM LOGIC ---
@@ -355,7 +397,10 @@
         // ==========================================
         async function initCamera() {
             try {
-                const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment', width: { ideal: 1280 } } });
+                // Prefer resolusi tinggi
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } } 
+                });
                 document.getElementById('webcam').srcObject = stream;
             } catch (err) {
                 alert("Akses Kamera Gagal: " + err.message);
@@ -372,19 +417,15 @@
                     cancelAnimationFrame(stopwatchReqId);
                     updateStopwatch();
                 } else {
-                    // Sistem di-reset atau menunggu larian bermula
                     startTime = null;
                     isRaceStopped = true;
                     document.getElementById('live-indicator').classList.add('hidden');
                     cancelAnimationFrame(stopwatchReqId);
-                    document.getElementById('stopwatch').innerHTML = `00:00<span class="text-4xl text-yellow-400">.00</span>`;
-                    
-                    // KEKALKAN AUTO JIKA IA SUDAH DIAKTIFKAN OLEH USER
-                    // Membuang line: if(autoCaptureActive) toggleAutoCapture();
+                    document.getElementById('stopwatch').innerHTML = `00:00<span class="text-4xl md:text-5xl text-yellow-400">.00</span>`;
                     
                     results = [];
                     renderTable();
-                    previousPixels = null; // Kosongkan rujukan imej lama
+                    previousPixels = null; 
                 }
             });
         }
@@ -400,9 +441,9 @@
             const milliseconds = Math.floor((diff % 1) * 100).toString().padStart(2, '0');
             
             if(diff < 60) {
-                document.getElementById('stopwatch').innerHTML = `${seconds}<span class="text-4xl text-yellow-400">.${milliseconds}</span>`;
+                document.getElementById('stopwatch').innerHTML = `${seconds}<span class="text-4xl md:text-5xl text-yellow-400">.${milliseconds}</span>`;
             } else {
-                document.getElementById('stopwatch').innerHTML = `${minutes}:${seconds}<span class="text-4xl text-yellow-400">.${milliseconds}</span>`;
+                document.getElementById('stopwatch').innerHTML = `${minutes}:${seconds}<span class="text-4xl md:text-5xl text-yellow-400">.${milliseconds}</span>`;
             }
             stopwatchReqId = requestAnimationFrame(updateStopwatch);
         }
@@ -411,7 +452,7 @@
             isRaceStopped = true;
             document.getElementById('live-indicator').classList.add('hidden');
             cancelAnimationFrame(stopwatchReqId);
-            if(autoCaptureActive) toggleAutoCapture(); // Dimatikan hanya jika user tekan STOP
+            if(autoCaptureActive) toggleAutoCapture(); 
         }
 
         function captureFinish() {
@@ -435,15 +476,19 @@
             ctx.fillStyle = "rgba(239, 68, 68, 0.9)";
             ctx.fillRect(centerX - 2, 0, 4, canvas.height);
 
+            // Laraskan saiz kotak dan teks berdasarkan resolusi kamera
+            const boxWidth = canvas.width * 0.15 > 120 ? canvas.width * 0.15 : 120;
+            const fontSize = canvas.height * 0.05 > 24 ? canvas.height * 0.05 : 24;
+
             ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
             ctx.beginPath();
-            ctx.roundRect(centerX - 50, 10, 100, 35, 8);
+            ctx.roundRect(centerX - (boxWidth/2), 10, boxWidth, fontSize * 1.5, 8);
             ctx.fill();
 
-            ctx.font = "bold 24px Arial";
+            ctx.font = `bold ${fontSize}px Arial`;
             ctx.fillStyle = "#ffffff";
             ctx.textAlign = "center";
-            ctx.fillText(timeTaken, centerX, 36);
+            ctx.fillText(timeTaken, centerX, 10 + (fontSize * 1.1));
 
             const imgData = canvas.toDataURL('image/jpeg', 0.7); 
             results.push({ pos: results.length + 1, time: timeTaken, img: imgData });
@@ -467,20 +512,16 @@
         }
 
         function processVideoFrame() {
-            // Hanya berhenti loop jika Fungsi dimatikan oleh user
             if (!autoCaptureActive) return; 
 
             const video = document.getElementById('webcam');
             
-            // Pintasan (Bypass) Loop: Jika larian belum mula ATAU kamera lambat respons
-            // Jangan tangkap pixel, hanya re-loop sambil tunggu pistol berbunyi
             if (video.videoWidth === 0 || !startTime || isRaceStopped) { 
-                previousPixels = null; // Pastikan memori pixel bersih sebelum mula
+                previousPixels = null; 
                 autoCaptureReqId = requestAnimationFrame(processVideoFrame);
                 return;
             }
 
-            // --- Larian Sudah Bermula, Proses Pengesanan Pergerakan ---
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d', { willReadFrequently: true });
             canvas.width = video.videoWidth;
@@ -527,16 +568,16 @@
 
             const sortedResults = [...results].sort((a, b) => parseFloat(a.time) - parseFloat(b.time));
             
-            let html = '<div class="grid grid-cols-3 gap-2 w-full">';
+            let html = '<div class="grid grid-cols-3 gap-2 md:gap-4 w-full">';
             const medals = ['🥇 PERTAMA', '🥈 KEDUA', '🥉 KETIGA'];
             const colors = ['text-yellow-400 border-yellow-500/30 bg-yellow-900/20', 'text-slate-300 border-slate-400/30 bg-slate-800/50', 'text-amber-600 border-amber-700/30 bg-amber-900/20'];
 
             for(let i=0; i<Math.min(3, sortedResults.length); i++) {
                 html += `
-                    <div class="rounded-xl border p-2 text-center flex flex-col items-center justify-center ${colors[i]}">
-                        <span class="text-[10px] font-bold uppercase mb-1">${medals[i]}</span>
-                        <span class="text-lg font-black font-mono">${sortedResults[i].time}s</span>
-                        <span class="text-[10px] text-slate-400 mt-1">Rekod #${sortedResults[i].pos}</span>
+                    <div class="rounded-xl border p-2 md:p-4 text-center flex flex-col items-center justify-center ${colors[i]}">
+                        <span class="text-[10px] md:text-xs font-bold uppercase mb-1">${medals[i]}</span>
+                        <span class="text-lg md:text-2xl font-black font-mono">${sortedResults[i].time}s</span>
+                        <span class="text-[10px] md:text-xs text-slate-400 mt-1">Rekod #${sortedResults[i].pos}</span>
                     </div>
                 `;
             }
@@ -556,15 +597,15 @@
 
             tbody.innerHTML = results.map((r, index) => `
                 <tr class="border-b border-slate-700/50 bg-slate-800/40 hover:bg-slate-700/60 transition-colors">
-                    <td class="py-3 px-3 font-bold text-slate-400 text-sm w-16">#${r.pos}</td>
-                    <td class="px-2 w-32">
+                    <td class="py-3 px-3 font-bold text-slate-400 text-sm w-16 md:text-lg">#${r.pos}</td>
+                    <td class="px-2 w-32 md:w-48">
                         <input type="number" step="0.01" value="${r.time}" 
                             onchange="updateRecordTime(${index}, this.value)"
-                            class="w-20 bg-slate-900 border border-slate-600 text-yellow-300 font-mono font-bold text-base p-1 rounded focus:ring-2 focus:ring-yellow-500 outline-none">
+                            class="w-20 md:w-28 bg-slate-900 border border-slate-600 text-yellow-300 font-mono font-bold text-base md:text-xl p-1 md:p-2 rounded focus:ring-2 focus:ring-yellow-500 outline-none">
                     </td>
-                    <td class="py-2 px-2 text-center">
+                    <td class="py-2 px-2 text-center flex justify-center">
                         <div class="inline-block relative rounded border border-slate-600 overflow-hidden shadow-sm group cursor-pointer hover:border-yellow-400 transition-colors" onclick="window.open('${r.img}')">
-                            <img src="${r.img}" class="h-12 w-auto object-cover">
+                            <img src="${r.img}" class="h-12 md:h-20 w-auto object-cover">
                         </div>
                     </td>
                 </tr>
