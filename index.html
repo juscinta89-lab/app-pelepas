@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sprint Timer Pro - Slit Scan Photo Finish</title>
+    <title>Sprint Timer Pro - Scroll & Align</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
@@ -21,13 +21,6 @@
             transform: translateX(-50%);
             z-index: 10;
             box-shadow: 0 0 5px rgba(239, 68, 68, 0.8);
-        }
-        .slit-canvas-view {
-            height: 350px;
-            width: auto;
-            max-width: none;
-            touch-action: pan-x pan-y;
-            cursor: crosshair;
         }
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
@@ -53,7 +46,7 @@
             <h1 class="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-orange-500 tracking-wider flex items-center justify-center gap-2">
                 ⚡ SPRINT TIMER
             </h1>
-            <p class="text-slate-400 text-sm tracking-widest uppercase mt-1">Sistem Photo Finish Profesional</p>
+            <p class="text-slate-400 text-sm tracking-widest uppercase mt-1">Sistem Skrol Jajaran Tepat</p>
             
             <div id="room-badge" class="hidden mt-3">
                 <span class="bg-blue-900/50 text-blue-300 border border-blue-500/50 px-3 py-1 rounded-full text-xs font-bold tracking-widest">
@@ -206,20 +199,33 @@
                 </div>
 
                 <p class="text-sm text-slate-300 mb-4 bg-blue-900/30 p-3 rounded-lg border border-blue-500/30 leading-relaxed">
-                    <span class="font-bold text-blue-400">ARAHAN:</span> Sila leret gambar ke kiri/kanan. <b>Klik tepat pada dada pelari</b> untuk menanda masa. Anda boleh menggunakan butang di bawah gambar untuk melaraskan kedudukan garisan dengan tepat (fine-tune).
+                    <span class="font-bold text-blue-400">ARAHAN:</span> Skrol gambar di bawah supaya <b>dada pelari berada di garisan merah tengah</b>. Kemudian tekan butang TANDA PELARI.
                 </p>
 
-                <div class="overflow-x-auto no-scrollbar border-2 border-slate-600 rounded-xl bg-black mb-6 shadow-inner relative">
-                    <canvas id="judge-canvas" class="slit-canvas-view"></canvas>
+                <div class="relative w-full h-64 md:h-96 border-2 border-slate-600 rounded-xl bg-black overflow-hidden mb-4 shadow-inner">
+                    
+                    <div id="judge-scroll-area" class="w-full h-full overflow-x-auto overflow-y-hidden no-scrollbar" onscroll="updateJudgeTime()">
+                        <canvas id="judge-canvas" class="h-full w-auto max-w-none block"></canvas>
+                    </div>
+                    
+                    <div class="absolute top-0 bottom-0 left-1/2 w-0.5 bg-red-500 transform -translate-x-1/2 z-20 pointer-events-none shadow-[0_0_5px_rgba(239,68,68,1)]"></div>
+                    
+                    <div class="absolute top-2 left-1/2 transform -translate-x-1/2 bg-black/80 px-4 py-1 rounded-md text-yellow-400 font-mono font-bold text-xl border border-yellow-400/50 z-20 shadow-lg pointer-events-none" id="judge-current-time">
+                        0.00s
+                    </div>
                 </div>
 
-                <h3 class="font-bold text-emerald-400 uppercase tracking-widest text-sm mb-3">Tandaan Pelari (Belum Disimpan)</h3>
+                <button onclick="markRunnerAtCrosshair()" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-black py-4 rounded-xl text-lg shadow-lg active:scale-95 transition-all border border-blue-400/50 tracking-widest mb-6">
+                    📍 TANDA PELARI PADA GARISAN
+                </button>
+
+                <h3 class="font-bold text-emerald-400 uppercase tracking-widest text-sm mb-3">Senarai Penanda (Belum Disimpan)</h3>
                 <div class="overflow-x-auto rounded-xl border border-slate-700 bg-slate-900/80 mb-6 max-h-64 overflow-y-auto no-scrollbar">
                     <table class="w-full text-left text-sm whitespace-nowrap">
                         <thead class="sticky top-0 bg-slate-800 z-10 shadow-sm border-b border-slate-700">
                             <tr class="text-slate-400 text-xs uppercase tracking-wider">
                                 <th class="py-3 px-3">Pelari</th>
-                                <th class="px-2 text-center">Pelarasan Halus (Tolak / Tambah Masa)</th>
+                                <th class="px-2 text-center">Pelarasan Halus (Masa)</th>
                                 <th class="px-2 text-center">Buang</th>
                             </tr>
                         </thead>
@@ -279,9 +285,9 @@
         let sliceData = []; 
         
         // Judging Variables
-        let tempMarks = []; // Menyimpan data penanda hakim secara sementara
-        let hoverX = -1;
-        let isHovering = false;
+        let tempMarks = []; 
+        let currentJudgeX = 0;
+        let currentJudgeTime = "0.00";
 
         // --- 3. OFFSET MASA PELAYAN ---
         db.ref('.info/serverTimeOffset').on('value', function(snapshot) {
@@ -306,7 +312,6 @@
             const fsBtnText = document.getElementById('fs-btn-text');
             const stopwatch = document.getElementById('stopwatch');
             const tableContainer = document.getElementById('table-container');
-            const judgeCanvas = document.getElementById('judge-canvas');
             
             if (document.fullscreenElement) {
                 isFullScreen = true;
@@ -315,7 +320,6 @@
                 fsBtnText.innerText = "Keluar Paparan Penuh";
                 stopwatch.classList.replace('text-7xl', 'text-9xl');
                 tableContainer.classList.replace('max-h-64', 'max-h-[500px]');
-                judgeCanvas.style.height = '500px'; 
             } else {
                 isFullScreen = false;
                 container.classList.add('max-w-md');
@@ -323,7 +327,6 @@
                 fsBtnText.innerText = "Paparan Penuh Desktop";
                 stopwatch.classList.replace('text-9xl', 'text-7xl');
                 tableContainer.classList.replace('max-h-[500px]', 'max-h-64');
-                judgeCanvas.style.height = '350px';
             }
         });
 
@@ -514,7 +517,7 @@
                 currentSliceX = 0;
                 sliceData = [];
                 
-                btn.innerHTML = `Merekod... (Tunggu pelari habis, kemudian tekan Henti di bawah)`;
+                btn.innerHTML = `Merekod... (Tunggu pelari habis, tekan Henti di bawah)`;
                 btn.className = "w-full bg-slate-700 text-slate-400 font-bold py-4 rounded-xl text-lg shadow-inner mb-4 border border-slate-600 cursor-not-allowed";
                 btn.disabled = true;
                 
@@ -578,7 +581,7 @@
         }
 
         // ==========================================
-        // SECTION: JUDGING PANEL LOGIC
+        // SECTION: JUDGING PANEL LOGIC (SCROLL TO ALIGN)
         // ==========================================
         const judgeCanvas = document.getElementById('judge-canvas');
         const jCtx = judgeCanvas.getContext('2d', { willReadFrequently: true });
@@ -589,8 +592,8 @@
             document.getElementById('section-judge').classList.remove('hidden');
 
             tempMarks = []; 
-            hoverX = -1;
-            isHovering = false;
+            currentJudgeX = 0;
+            currentJudgeTime = "0.00";
             
             judgeCanvas.width = currentSliceX;
             judgeCanvas.height = slitCanvas.height;
@@ -598,9 +601,12 @@
             renderJudgeCanvas();
             renderTempMarksTable();
             
-            // Scroll ke hujung
-            const scrollDiv = judgeCanvas.parentElement;
-            scrollDiv.scrollLeft = scrollDiv.scrollWidth;
+            // Auto scroll ke hujung perlumbaan
+            setTimeout(() => {
+                const scrollDiv = document.getElementById('judge-scroll-area');
+                scrollDiv.scrollLeft = scrollDiv.scrollWidth;
+                updateJudgeTime(); // Init masa pertama
+            }, 50);
         }
 
         function discardAndReturn() {
@@ -619,8 +625,9 @@
             tempMarks = [];
         }
 
+        // --- Carian Masa yang kukuh ---
         function getTimeFromX(targetX) {
-            if(sliceData.length === 0) return "0.00";
+            if(!sliceData || sliceData.length === 0) return "0.00";
             let closest = sliceData;
             let minDiff = Math.abs(targetX - closest.x);
             for(let i=1; i<sliceData.length; i++) {
@@ -630,114 +637,85 @@
                     closest = sliceData[i];
                 }
             }
-            return closest.time;
+            return closest.time ? closest.time : "0.00";
         }
 
         function getXFromTime(targetTime) {
-            if(sliceData.length === 0) return 0;
+            if(!sliceData || sliceData.length === 0) return 0;
             let t = parseFloat(targetTime);
             if (isNaN(t)) return 0;
 
             let closest = sliceData;
-            let minDiff = Math.abs(t - parseFloat(closest.time));
+            let minDiff = Math.abs(t - parseFloat(closest.time || 0));
             for(let i=1; i<sliceData.length; i++) {
-                let diff = Math.abs(t - parseFloat(sliceData[i].time));
+                let pt = parseFloat(sliceData[i].time);
+                if(isNaN(pt)) continue;
+                let diff = Math.abs(t - pt);
                 if(diff < minDiff) {
                     minDiff = diff;
                     closest = sliceData[i];
                 }
             }
-            return closest.x;
+            return closest.x || 0;
         }
 
-        // --- HOVER / TOUCH GUIDE LINE ---
-        judgeCanvas.addEventListener('mousemove', function(e) {
+        // --- Fungsi Skrol untuk Jajaran (Scroll & Align) ---
+        function updateJudgeTime() {
+            const scrollArea = document.getElementById('judge-scroll-area');
             const rect = judgeCanvas.getBoundingClientRect();
-            const scaleX = judgeCanvas.width / rect.width;
-            hoverX = (e.clientX - rect.left) * scaleX;
-            isHovering = true;
-            renderJudgeCanvas();
-        });
+            const areaRect = scrollArea.getBoundingClientRect();
 
-        judgeCanvas.addEventListener('mouseleave', function() {
-            isHovering = false;
-            hoverX = -1;
-            renderJudgeCanvas();
-        });
+            // Kira kedudukan tengah skrin peranti (Crosshair)
+            const centerViewportX = areaRect.left + (areaRect.width / 2);
 
-        judgeCanvas.addEventListener('touchmove', function(e) {
-            const rect = judgeCanvas.getBoundingClientRect();
+            // Jajarkan dengan kedudukan sebenar di dalam canvas
             const scaleX = judgeCanvas.width / rect.width;
-            hoverX = (e.touches.clientX - rect.left) * scaleX;
-            isHovering = true;
-            renderJudgeCanvas();
-        }, { passive: true });
-        
-        judgeCanvas.addEventListener('touchend', function() {
-            isHovering = false;
-            hoverX = -1;
-            renderJudgeCanvas();
-        });
+            const targetX = (centerViewportX - rect.left) * scaleX;
 
-        // --- KLIK UNTUK MENANDA KEPUTUSAN ---
-        judgeCanvas.addEventListener('click', function(e) {
-            const rect = judgeCanvas.getBoundingClientRect();
-            const scaleX = judgeCanvas.width / rect.width;
-            const clickX = (e.clientX - rect.left) * scaleX;
-            
-            const markedTime = getTimeFromX(clickX);
-            const uniqueId = 'mark_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
+            currentJudgeX = targetX;
+            currentJudgeTime = getTimeFromX(targetX);
+
+            document.getElementById('judge-current-time').innerText = currentJudgeTime + "s";
+        }
+
+        // --- Butang Tanda Manual ---
+        function markRunnerAtCrosshair() {
+            if(currentJudgeX < 0 || sliceData.length === 0) return;
+
+            const uniqueId = 'mark_' + Date.now();
             
             tempMarks.push({
                 id: uniqueId, 
-                x: getXFromTime(markedTime), 
-                time: markedTime
+                x: currentJudgeX, 
+                time: currentJudgeTime
             });
             
             renderJudgeCanvas();
             renderTempMarksTable();
-        });
+        }
 
+        // Lukisan Kanvas (Hanya gambar asli + tanda biru. Crosshair merah dikawal oleh CSS)
         function renderJudgeCanvas() {
-            // Base Image
+            // Gambar asal
             jCtx.drawImage(slitCanvas, 0, 0, currentSliceX, slitCanvas.height, 0, 0, currentSliceX, slitCanvas.height);
             
-            // Guide Line Putih (Masa Hover)
-            if (isHovering && hoverX >= 0) {
-                const hoverTime = getTimeFromX(hoverX);
-                
-                jCtx.strokeStyle = "rgba(255, 255, 255, 0.9)";
-                jCtx.setLineDash(); 
-                jCtx.lineWidth = 3;
-                jCtx.beginPath();
-                jCtx.moveTo(hoverX, 0);
-                jCtx.lineTo(hoverX, judgeCanvas.height);
-                jCtx.stroke();
-                jCtx.setLineDash([]); 
-
-                jCtx.fillStyle = "rgba(255, 255, 255, 0.9)";
-                jCtx.fillRect(hoverX - 45, judgeCanvas.height - 40, 90, 30);
-                jCtx.fillStyle = "#000000";
-                jCtx.font = "bold 18px Arial";
-                jCtx.textAlign = "center";
-                jCtx.fillText(hoverTime + "s", hoverX, judgeCanvas.height - 18);
-            }
-
-            // Tanda Rasmi Hakim (Merah)
+            // Tanda pelari yang telah diklik
             tempMarks.forEach((m) => {
-                jCtx.strokeStyle = "#ef4444"; 
+                // Garisan biru untuk pelari yang sudah ditanda
+                jCtx.strokeStyle = "#3b82f6"; // blue-500
                 jCtx.lineWidth = 4;
                 jCtx.beginPath();
                 jCtx.moveTo(m.x, 0);
                 jCtx.lineTo(m.x, judgeCanvas.height);
                 jCtx.stroke();
                 
+                // Kotak masa
                 jCtx.fillStyle = "rgba(0,0,0,0.85)";
-                jCtx.fillRect(m.x - 50, 15, 100, 50);
-                jCtx.fillStyle = "#facc15"; 
+                jCtx.fillRect(m.x - 50, judgeCanvas.height - 60, 100, 50);
+                jCtx.fillStyle = "#3b82f6"; 
                 jCtx.font = "bold 26px Arial";
                 jCtx.textAlign = "center";
-                jCtx.fillText(m.time + "s", m.x, 49);
+                jCtx.fillText(m.time + "s", m.x, judgeCanvas.height - 25);
             });
         }
 
@@ -769,27 +747,30 @@
             const tbody = document.getElementById('temp-marks-table');
             
             if(tempMarks.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="3" class="text-center py-6 text-slate-500 italic text-sm">Sila klik pada gambar di atas untuk menanda pelari.</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="3" class="text-center py-6 text-slate-500 italic text-sm">Skrol gambar & tekan TANDA PELARI untuk merekod.</td></tr>`;
                 return;
             }
 
             const sortedMarks = [...tempMarks].sort((a,b) => parseFloat(a.time) - parseFloat(b.time));
 
             tbody.innerHTML = sortedMarks.map((m, index) => {
+                // Elakkan paparan NaN atau undefined pada jadual
+                const safeTime = m.time || "0.00";
+                
                 return `
                 <tr class="border-b border-slate-700/50 hover:bg-slate-800/60 transition-colors">
-                    <td class="py-3 px-3 font-bold text-yellow-400 text-base w-24">#${index + 1}</td>
+                    <td class="py-3 px-3 font-bold text-blue-400 text-base w-24">#${index + 1}</td>
                     <td class="px-2 text-center flex items-center justify-center gap-2 py-3">
                         <button onclick="adjustTempMark('${m.id}', -0.05)" class="bg-slate-700 hover:bg-slate-600 px-2 py-1 rounded text-xs font-bold border border-slate-600 shadow">-0.05</button>
                         <button onclick="adjustTempMark('${m.id}', -0.01)" class="bg-slate-700 hover:bg-slate-600 px-2 py-1 rounded text-xs font-bold border border-slate-600 shadow">-0.01</button>
                         
-                        <span class="font-mono text-xl font-black w-24 text-center text-white">${m.time}</span>
+                        <span class="font-mono text-xl font-black w-24 text-center text-white">${safeTime}</span>
                         
                         <button onclick="adjustTempMark('${m.id}', 0.01)" class="bg-slate-700 hover:bg-slate-600 px-2 py-1 rounded text-xs font-bold border border-slate-600 shadow">+0.01</button>
                         <button onclick="adjustTempMark('${m.id}', 0.05)" class="bg-slate-700 hover:bg-slate-600 px-2 py-1 rounded text-xs font-bold border border-slate-600 shadow">+0.05</button>
                     </td>
                     <td class="py-2 px-2 text-center">
-                        <button onclick="deleteTempMark('${m.id}')" class="bg-red-500/20 hover:bg-red-500/50 text-red-400 border border-red-500/30 px-3 py-2 rounded text-xs font-bold transition-colors">PADAM</button>
+                        <button onclick="deleteTempMark('${m.id}')" class="bg-red-500/20 hover:bg-red-500/50 text-red-400 border border-red-500/30 px-3 py-2 rounded text-xs font-bold transition-colors">BUANG</button>
                     </td>
                 </tr>
                 `;
@@ -797,17 +778,19 @@
         }
 
         // ==========================================
-        // PROSES SIMPAN KEPUTUSAN HAKIM
+        // PROSES SIMPAN KEPUTUSAN HAKIM KE JADUAL RASMI
         // ==========================================
         function saveAndExitJudge() {
             if(tempMarks.length === 0) {
-                alert("Anda belum menanda mana-mana pelari. Sila klik pada gambar. Jika ingin batal, tekan 'Buang & Kembali'.");
+                alert("Anda belum menanda mana-mana pelari. Tekan butang biru besar untuk menanda.");
                 return;
             }
 
             if(confirm("Sahkan masa dan simpan semua keputusan ini ke jadual utama?")) {
                 
                 tempMarks.forEach(m => {
+                    const safeTime = m.time || "0.00";
+                    
                     const cropWidth = isFullScreen ? 600 : 300; 
                     const startX = Math.max(0, m.x - cropWidth / 2);
                     const actualCropWidth = Math.min(cropWidth, currentSliceX - startX);
@@ -819,6 +802,7 @@
                     
                     pCtx.drawImage(slitCanvas, startX, 0, actualCropWidth, slitCanvas.height, 0, 0, actualCropWidth, slitCanvas.height);
                     
+                    // Lukis semula tanda merah rasmi atas gambar crop PDF
                     const lineX = m.x - startX;
                     pCtx.strokeStyle = "red";
                     pCtx.lineWidth = 6;
@@ -832,12 +816,12 @@
                     pCtx.fillStyle = "#facc15";
                     pCtx.font = "bold 28px Arial";
                     pCtx.textAlign = "center";
-                    pCtx.fillText(m.time + "s", lineX, 49);
+                    pCtx.fillText(safeTime + "s", lineX, 49);
                     
                     const imgData = proofCanvas.toDataURL('image/jpeg', 0.8);
                     
                     results.push({
-                        time: m.time,
+                        time: safeTime,
                         img: imgData
                     });
                 });
@@ -873,7 +857,8 @@
                 return;
             }
 
-            const sortedResults = [...results].map((r, i) => ({...r, originalIndex: i})).sort((a, b) => parseFloat(a.time) - parseFloat(b.time));
+            // Mencegah ralat undefined di pemenang jika jadual dimanipulasi salah
+            const sortedResults = [...results].map((r, i) => ({...r, originalIndex: i})).sort((a, b) => parseFloat(a.time || 0) - parseFloat(b.time || 0));
             
             let html = '<div class="grid grid-cols-3 gap-2 md:gap-4 w-full">';
             const medals = ['🥇 PERTAMA', '🥈 KEDUA', '🥉 KETIGA'];
@@ -881,11 +866,12 @@
 
             for(let i=0; i<Math.min(3, sortedResults.length); i++) {
                 const textSize = isFullScreen ? 'text-2xl' : 'text-lg';
+                const safeTimeDisplay = sortedResults[i].time || "0.00";
                 
                 html += `
                     <div class="rounded-xl border p-2 md:p-4 text-center flex flex-col items-center justify-center ${colors[i]}">
                         <span class="text-[10px] md:text-xs font-bold uppercase mb-1">${medals[i]}</span>
-                        <span class="${textSize} md:text-3xl font-black font-mono">${sortedResults[i].time}s</span>
+                        <span class="${textSize} md:text-3xl font-black font-mono">${safeTimeDisplay}s</span>
                         <span class="text-[10px] md:text-xs text-slate-400 mt-1">Tangkapan #${sortedResults[i].originalIndex + 1}</span>
                     </div>
                 `;
@@ -909,11 +895,13 @@
                 const inputSize = isFullScreen ? 'text-xl w-28 p-2' : 'text-base w-20 p-1';
                 const imgSize = isFullScreen ? 'h-24' : 'h-16'; 
                 
+                const safeTimeVal = r.time || "0.00";
+                
                 return `
                 <tr class="border-b border-slate-700/50 bg-slate-800/40 hover:bg-slate-700/60 transition-colors">
                     <td class="py-3 px-3 font-bold text-slate-400 ${textSize} w-16">#${index + 1}</td>
                     <td class="px-2 w-32 md:w-48">
-                        <input type="number" step="0.01" value="${r.time}" 
+                        <input type="number" step="0.01" value="${safeTimeVal}" 
                             onchange="updateMainRecordTime(${index}, this.value)"
                             class="${inputSize} bg-slate-900 border border-slate-600 text-yellow-300 font-mono font-bold rounded focus:ring-2 focus:ring-yellow-500 outline-none text-center">
                     </td>
@@ -939,7 +927,7 @@
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF();
             
-            const sortedResults = [...results].map((r, i) => ({...r, originalIndex: i})).sort((a, b) => parseFloat(a.time) - parseFloat(b.time));
+            const sortedResults = [...results].map((r, i) => ({...r, originalIndex: i})).sort((a, b) => parseFloat(a.time || 0) - parseFloat(b.time || 0));
 
             doc.setFont("helvetica", "bold");
             doc.setFontSize(22);
@@ -968,7 +956,8 @@
                 
                 doc.setFontSize(16);
                 doc.setTextColor(220, 38, 38); 
-                doc.text(`${r.time} s`, 15, yPos + 15);
+                const safePdfTime = r.time || "0.00";
+                doc.text(`${safePdfTime} s`, 15, yPos + 15);
 
                 doc.setFontSize(10);
                 doc.setTextColor(100, 100, 100);
