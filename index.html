@@ -202,15 +202,17 @@
                     <span class="font-bold text-blue-400">ARAHAN:</span> Skrol gambar di bawah supaya <b>dada pelari berada di garisan merah tengah</b>. Kemudian tekan butang TANDA PELARI.
                 </p>
 
-                <div class="relative w-full h-64 md:h-96 border-2 border-slate-600 rounded-xl bg-black overflow-hidden mb-4 shadow-inner">
+                <div class="relative w-full h-[350px] md:h-[500px] border-2 border-slate-600 rounded-xl bg-black overflow-hidden mb-4 shadow-inner">
                     
-                    <div id="judge-scroll-area" class="w-full h-full overflow-x-auto overflow-y-hidden no-scrollbar" onscroll="updateJudgeTime()">
-                        <canvas id="judge-canvas" class="h-full w-auto max-w-none block"></canvas>
+                    <div id="judge-scroll-area" class="w-full h-full overflow-x-auto overflow-y-hidden no-scrollbar relative" onscroll="updateJudgeTime()">
+                        <div id="judge-padding-wrapper" class="flex h-full" style="width: max-content;">
+                            <canvas id="judge-canvas" class="h-full block max-w-none"></canvas>
+                        </div>
                     </div>
                     
-                    <div class="absolute top-0 bottom-0 left-1/2 w-0.5 bg-red-500 transform -translate-x-1/2 z-20 pointer-events-none shadow-[0_0_5px_rgba(239,68,68,1)]"></div>
+                    <div class="absolute top-0 bottom-0 left-1/2 w-[3px] bg-red-500 transform -translate-x-1/2 z-20 pointer-events-none shadow-[0_0_8px_rgba(239,68,68,1)]"></div>
                     
-                    <div class="absolute top-2 left-1/2 transform -translate-x-1/2 bg-black/80 px-4 py-1 rounded-md text-yellow-400 font-mono font-bold text-xl border border-yellow-400/50 z-20 shadow-lg pointer-events-none" id="judge-current-time">
+                    <div class="absolute top-4 left-1/2 transform -translate-x-1/2 bg-black/90 px-6 py-2 rounded-lg text-yellow-400 font-mono font-black text-2xl border-2 border-yellow-400/50 z-20 shadow-2xl pointer-events-none" id="judge-current-time">
                         0.00s
                     </div>
                 </div>
@@ -230,7 +232,7 @@
                             </tr>
                         </thead>
                         <tbody id="temp-marks-table">
-                            </tbody>
+                        </tbody>
                     </table>
                 </div>
 
@@ -288,6 +290,8 @@
         let tempMarks = []; 
         let currentJudgeX = 0;
         let currentJudgeTime = "0.00";
+        // Kadar regangan gambar (supaya nampak normal dan mudah scroll)
+        const stretchRatio = 4; 
 
         // --- 3. OFFSET MASA PELAYAN ---
         db.ref('.info/serverTimeOffset').on('value', function(snapshot) {
@@ -312,6 +316,7 @@
             const fsBtnText = document.getElementById('fs-btn-text');
             const stopwatch = document.getElementById('stopwatch');
             const tableContainer = document.getElementById('table-container');
+            const scrollAreaDiv = document.getElementById('judge-scroll-area');
             
             if (document.fullscreenElement) {
                 isFullScreen = true;
@@ -328,6 +333,9 @@
                 stopwatch.classList.replace('text-9xl', 'text-7xl');
                 tableContainer.classList.replace('max-h-[500px]', 'max-h-64');
             }
+            
+            // Recalculate padding if judge panel is open
+            if(scrollAreaDiv) updateJudgePadding();
         });
 
         // --- 4. KAWALAN UI & ROOM LOGIC ---
@@ -586,6 +594,17 @@
         const judgeCanvas = document.getElementById('judge-canvas');
         const jCtx = judgeCanvas.getContext('2d', { willReadFrequently: true });
 
+        function updateJudgePadding() {
+            const scrollArea = document.getElementById('judge-scroll-area');
+            const padWrapper = document.getElementById('judge-padding-wrapper');
+            if(scrollArea && padWrapper) {
+                // Padding separuh skrin memastikan hujung imej boleh discroll sampai ke tengah merah
+                const halfWidth = scrollArea.clientWidth / 2;
+                padWrapper.style.paddingLeft = halfWidth + 'px';
+                padWrapper.style.paddingRight = halfWidth + 'px';
+            }
+        }
+
         function openJudgePanel() {
             document.getElementById('finish-camera-view').classList.add('hidden');
             document.getElementById('results-panel-main').classList.add('hidden');
@@ -598,6 +617,10 @@
             judgeCanvas.width = currentSliceX;
             judgeCanvas.height = slitCanvas.height;
             
+            // Regangkan imej supaya senang skrol
+            judgeCanvas.style.width = (currentSliceX * stretchRatio) + 'px';
+            
+            updateJudgePadding();
             renderJudgeCanvas();
             renderTempMarksTable();
             
@@ -605,8 +628,8 @@
             setTimeout(() => {
                 const scrollDiv = document.getElementById('judge-scroll-area');
                 scrollDiv.scrollLeft = scrollDiv.scrollWidth;
-                updateJudgeTime(); // Init masa pertama
-            }, 50);
+                updateJudgeTime(); 
+            }, 100);
         }
 
         function discardAndReturn() {
@@ -625,13 +648,13 @@
             tempMarks = [];
         }
 
-        // --- Carian Masa yang kukuh ---
-        function getTimeFromX(targetX) {
+        // --- Carian Masa yang kukuh (dari RAW koordinat) ---
+        function getTimeFromX(targetRawX) {
             if(!sliceData || sliceData.length === 0) return "0.00";
             let closest = sliceData;
-            let minDiff = Math.abs(targetX - closest.x);
+            let minDiff = Math.abs(targetRawX - closest.x);
             for(let i=1; i<sliceData.length; i++) {
-                let diff = Math.abs(targetX - sliceData[i].x);
+                let diff = Math.abs(targetRawX - sliceData[i].x);
                 if(diff < minDiff) {
                     minDiff = diff;
                     closest = sliceData[i];
@@ -662,18 +685,21 @@
         // --- Fungsi Skrol untuk Jajaran (Scroll & Align) ---
         function updateJudgeTime() {
             const scrollArea = document.getElementById('judge-scroll-area');
-            const rect = judgeCanvas.getBoundingClientRect();
-            const areaRect = scrollArea.getBoundingClientRect();
+            const padWrapper = document.getElementById('judge-padding-wrapper');
+            
+            // Dapatkan kedudukan viewport tengah dalam px (CSS)
+            // Disebabkan padding-left ialah halfWidth, scrollLeft=0 bermaksud permulaan imej ada di tengah
+            const scrollCenterCSS = scrollArea.scrollLeft; 
 
-            // Kira kedudukan tengah skrin peranti (Crosshair)
-            const centerViewportX = areaRect.left + (areaRect.width / 2);
+            // Convert CSS px back to RAW canvas width
+            const scaleX = 1 / stretchRatio; 
+            let targetRawX = scrollCenterCSS * scaleX;
 
-            // Jajarkan dengan kedudukan sebenar di dalam canvas
-            const scaleX = judgeCanvas.width / rect.width;
-            const targetX = (centerViewportX - rect.left) * scaleX;
+            if(targetRawX < 0) targetRawX = 0;
+            if(targetRawX > currentSliceX) targetRawX = currentSliceX;
 
-            currentJudgeX = targetX;
-            currentJudgeTime = getTimeFromX(targetX);
+            currentJudgeX = targetRawX;
+            currentJudgeTime = getTimeFromX(targetRawX);
 
             document.getElementById('judge-current-time').innerText = currentJudgeTime + "s";
         }
@@ -694,14 +720,12 @@
             renderTempMarksTable();
         }
 
-        // Lukisan Kanvas (Hanya gambar asli + tanda biru. Crosshair merah dikawal oleh CSS)
         function renderJudgeCanvas() {
-            // Gambar asal
+            // Gambar asal ditarik secara CSS, kita cuma lukis data RAW
             jCtx.drawImage(slitCanvas, 0, 0, currentSliceX, slitCanvas.height, 0, 0, currentSliceX, slitCanvas.height);
             
-            // Tanda pelari yang telah diklik
+            // Tanda pelari (garis biru) yang telah diklik
             tempMarks.forEach((m) => {
-                // Garisan biru untuk pelari yang sudah ditanda
                 jCtx.strokeStyle = "#3b82f6"; // blue-500
                 jCtx.lineWidth = 4;
                 jCtx.beginPath();
@@ -709,13 +733,13 @@
                 jCtx.lineTo(m.x, judgeCanvas.height);
                 jCtx.stroke();
                 
-                // Kotak masa
+                // Label
                 jCtx.fillStyle = "rgba(0,0,0,0.85)";
-                jCtx.fillRect(m.x - 50, judgeCanvas.height - 60, 100, 50);
+                jCtx.fillRect(m.x - 30, judgeCanvas.height - 60, 60, 40);
                 jCtx.fillStyle = "#3b82f6"; 
-                jCtx.font = "bold 26px Arial";
+                jCtx.font = "bold 18px Arial";
                 jCtx.textAlign = "center";
-                jCtx.fillText(m.time + "s", m.x, judgeCanvas.height - 25);
+                jCtx.fillText(m.time + "s", m.x, judgeCanvas.height - 35);
             });
         }
 
@@ -754,7 +778,6 @@
             const sortedMarks = [...tempMarks].sort((a,b) => parseFloat(a.time) - parseFloat(b.time));
 
             tbody.innerHTML = sortedMarks.map((m, index) => {
-                // Elakkan paparan NaN atau undefined pada jadual
                 const safeTime = m.time || "0.00";
                 
                 return `
@@ -791,19 +814,23 @@
                 tempMarks.forEach(m => {
                     const safeTime = m.time || "0.00";
                     
-                    const cropWidth = isFullScreen ? 600 : 300; 
-                    const startX = Math.max(0, m.x - cropWidth / 2);
-                    const actualCropWidth = Math.min(cropWidth, currentSliceX - startX);
+                    // Kita potong gambar RAW (slitCanvas) dan regangkan ia untuk PDF
+                    const rawCropWidth = slitCanvas.height / stretchRatio; 
+                    const startX = Math.max(0, m.x - rawCropWidth / 2);
+                    const actualRawCropWidth = Math.min(rawCropWidth, currentSliceX - startX);
                     
                     const proofCanvas = document.createElement('canvas');
-                    proofCanvas.width = actualCropWidth;
+                    proofCanvas.width = actualRawCropWidth * stretchRatio;
                     proofCanvas.height = slitCanvas.height;
                     const pCtx = proofCanvas.getContext('2d');
                     
-                    pCtx.drawImage(slitCanvas, startX, 0, actualCropWidth, slitCanvas.height, 0, 0, actualCropWidth, slitCanvas.height);
+                    // Lukis dan Regang
+                    pCtx.drawImage(slitCanvas, 
+                        startX, 0, actualRawCropWidth, slitCanvas.height, 
+                        0, 0, proofCanvas.width, proofCanvas.height);
                     
                     // Lukis semula tanda merah rasmi atas gambar crop PDF
-                    const lineX = m.x - startX;
+                    const lineX = (m.x - startX) * stretchRatio;
                     pCtx.strokeStyle = "red";
                     pCtx.lineWidth = 6;
                     pCtx.beginPath();
@@ -857,7 +884,6 @@
                 return;
             }
 
-            // Mencegah ralat undefined di pemenang jika jadual dimanipulasi salah
             const sortedResults = [...results].map((r, i) => ({...r, originalIndex: i})).sort((a, b) => parseFloat(a.time || 0) - parseFloat(b.time || 0));
             
             let html = '<div class="grid grid-cols-3 gap-2 md:gap-4 w-full">';
