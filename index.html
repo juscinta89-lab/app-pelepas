@@ -21,6 +21,22 @@
             transform: translateX(-50%);
             z-index: 10;
         }
+        .torso-zone {
+            position: absolute;
+            top: 30%;
+            bottom: 30%;
+            left: 50%;
+            width: 20px;
+            transform: translateX(-50%);
+            border-left: 2px solid rgba(250, 204, 21, 0.7);
+            border-right: 2px solid rgba(250, 204, 21, 0.7);
+            background-color: rgba(250, 204, 21, 0.15);
+            z-index: 11;
+            pointer-events: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
         .glass-panel {
@@ -28,7 +44,6 @@
             backdrop-filter: blur(10px);
             border: 1px solid rgba(255, 255, 255, 0.1);
         }
-        /* Memastikan transisi saiz kontena nampak lancar */
         #main-container {
             transition: max-width 0.4s ease-in-out;
         }
@@ -59,7 +74,7 @@
             <div class="glass-panel p-6 rounded-3xl shadow-2xl text-center">
                 <div class="text-4xl mb-4">🏆</div>
                 <h2 class="text-xl font-bold mb-2 text-white">Sertai Kejohanan</h2>
-                <p class="text-sm text-slate-400 mb-6">Masukkan kod rahsia yang sama untuk Unit Pelepas dan Unit Penamat supaya ia bersambung (Cth: SUKMA2026, SKSA1)</p>
+                <p class="text-sm text-slate-400 mb-6">Masukkan kod rahsia yang sama untuk Unit Pelepas dan Unit Penamat supaya ia bersambung (Cth: SUKMA2026)</p>
                 
                 <input type="text" id="room-input" placeholder="Masukkan Kod Kejohanan" class="w-full bg-slate-800 border border-slate-600 text-center text-xl font-bold p-4 rounded-xl mb-4 text-yellow-400 focus:outline-none focus:border-yellow-500 uppercase placeholder:text-slate-600">
                 
@@ -133,11 +148,16 @@
 
                 <div class="absolute top-0 left-0 bg-red-600 text-white text-[10px] font-bold px-3 py-1 rounded-br-lg rounded-tl-3xl tracking-wider hidden z-20" id="live-indicator">LIVE REC</div>
                 
-                <div id="stopwatch" class="text-7xl md:text-8xl font-black text-center py-2 text-transparent bg-clip-text bg-gradient-to-b from-white to-slate-400 tracking-wider font-mono shadow-sm">00:00<span class="text-4xl md:text-5xl text-yellow-400">.00</span></div>
+                <div id="stopwatch" class="text-7xl font-black text-center py-2 text-transparent bg-clip-text bg-gradient-to-b from-white to-slate-400 tracking-wider font-mono shadow-sm transition-all duration-300">00:00<span class="text-4xl text-yellow-400">.00</span></div>
                 
                 <div class="relative mb-5 mt-2 overflow-hidden rounded-2xl border border-slate-600 bg-black shadow-inner">
                     <video id="webcam" autoplay playsinline class="w-full object-cover aspect-video"></video>
+                    
                     <div class="finish-line-overlay"></div>
+                    
+                    <div class="torso-zone">
+                        <span style="writing-mode: vertical-rl; text-orientation: mixed;" class="text-[9px] font-bold text-yellow-400 tracking-widest opacity-80">ZON DADA</span>
+                    </div>
                 </div>
 
                 <div class="grid grid-cols-2 gap-3 mb-4">
@@ -164,7 +184,7 @@
                     <span id="result-count" class="text-sm bg-emerald-500/20 text-emerald-300 px-3 py-1 rounded-full font-bold border border-emerald-500/30">0</span>
                 </div>
                 
-                <div class="overflow-x-auto no-scrollbar max-h-64 md:max-h-96 overflow-y-auto rounded-xl border border-slate-700 bg-slate-900/50 mb-4">
+                <div id="table-container" class="overflow-x-auto no-scrollbar max-h-64 overflow-y-auto rounded-xl border border-slate-700 bg-slate-900/50 mb-4 transition-all duration-300">
                     <table class="w-full text-left text-sm whitespace-nowrap">
                         <thead class="sticky top-0 bg-slate-800 z-10 shadow-sm">
                             <tr class="text-slate-400 text-xs uppercase tracking-wider">
@@ -219,6 +239,7 @@
         let isRaceStopped = true; 
         let serverOffset = 0; 
         let firebaseListener = null;
+        let isFullScreen = false; // Flag status skrin
 
         // Mic
         let isMicActive = false;
@@ -249,21 +270,31 @@
             }
         }
 
-        // Dengar perubahan skrin penuh untuk kembangkan UI
+        // Listener perubahan skrin (Fix Bug Saiz Teks)
         document.addEventListener('fullscreenchange', () => {
             const container = document.getElementById('main-container');
             const fsBtnText = document.getElementById('fs-btn-text');
+            const stopwatch = document.getElementById('stopwatch');
+            const tableContainer = document.getElementById('table-container');
             
             if (document.fullscreenElement) {
-                // Skrin Penuh - Kembangkan lebar
+                isFullScreen = true;
                 container.classList.remove('max-w-md');
                 container.classList.add('max-w-6xl');
                 fsBtnText.innerText = "Keluar Paparan Penuh";
+                
+                // Besarkan teks jam
+                stopwatch.classList.replace('text-7xl', 'text-9xl');
+                tableContainer.classList.replace('max-h-64', 'max-h-[500px]');
             } else {
-                // Skrin Biasa - Saiz telefon
+                isFullScreen = false;
                 container.classList.add('max-w-md');
                 container.classList.remove('max-w-6xl');
                 fsBtnText.innerText = "Paparan Penuh Desktop";
+                
+                // Kecilkan semula teks jam
+                stopwatch.classList.replace('text-9xl', 'text-7xl');
+                tableContainer.classList.replace('max-h-[500px]', 'max-h-64');
             }
         });
 
@@ -397,7 +428,6 @@
         // ==========================================
         async function initCamera() {
             try {
-                // Prefer resolusi tinggi
                 const stream = await navigator.mediaDevices.getUserMedia({ 
                     video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } } 
                 });
@@ -421,7 +451,9 @@
                     isRaceStopped = true;
                     document.getElementById('live-indicator').classList.add('hidden');
                     cancelAnimationFrame(stopwatchReqId);
-                    document.getElementById('stopwatch').innerHTML = `00:00<span class="text-4xl md:text-5xl text-yellow-400">.00</span>`;
+                    
+                    const msSize = isFullScreen ? 'text-6xl' : 'text-4xl';
+                    document.getElementById('stopwatch').innerHTML = `00:00<span class="${msSize} text-yellow-400">.00</span>`;
                     
                     results = [];
                     renderTable();
@@ -440,10 +472,13 @@
             const seconds = Math.floor(diff % 60).toString().padStart(2, '0');
             const milliseconds = Math.floor((diff % 1) * 100).toString().padStart(2, '0');
             
+            // Pilih saiz millisecond berdasarkan mod skrin
+            const msSize = isFullScreen ? 'text-6xl' : 'text-4xl';
+            
             if(diff < 60) {
-                document.getElementById('stopwatch').innerHTML = `${seconds}<span class="text-4xl md:text-5xl text-yellow-400">.${milliseconds}</span>`;
+                document.getElementById('stopwatch').innerHTML = `${seconds}<span class="${msSize} text-yellow-400">.${milliseconds}</span>`;
             } else {
-                document.getElementById('stopwatch').innerHTML = `${minutes}:${seconds}<span class="text-4xl md:text-5xl text-yellow-400">.${milliseconds}</span>`;
+                document.getElementById('stopwatch').innerHTML = `${minutes}:${seconds}<span class="${msSize} text-yellow-400">.${milliseconds}</span>`;
             }
             stopwatchReqId = requestAnimationFrame(updateStopwatch);
         }
@@ -476,7 +511,6 @@
             ctx.fillStyle = "rgba(239, 68, 68, 0.9)";
             ctx.fillRect(centerX - 2, 0, 4, canvas.height);
 
-            // Laraskan saiz kotak dan teks berdasarkan resolusi kamera
             const boxWidth = canvas.width * 0.15 > 120 ? canvas.width * 0.15 : 120;
             const fontSize = canvas.height * 0.05 > 24 ? canvas.height * 0.05 : 24;
 
@@ -511,6 +545,7 @@
             }
         }
 
+        // --- PENGESANAN ZON DADA (TORSO RULE) ---
         function processVideoFrame() {
             if (!autoCaptureActive) return; 
 
@@ -529,7 +564,13 @@
             ctx.drawImage(video, 0, 0);
 
             const lineX = Math.floor(canvas.width / 2);
-            const imageData = ctx.getImageData(lineX, 0, 1, canvas.height);
+            
+            // FOKUS HANYA PADA ZON DADA (30% ke 70% dari ketinggian video)
+            const chestStartY = Math.floor(canvas.height * 0.30);
+            const chestHeight = Math.floor(canvas.height * 0.40); // 70% - 30% = 40%
+
+            // Ekstrak piksel hanya di bahagian dada
+            const imageData = ctx.getImageData(lineX, chestStartY, 1, chestHeight);
             const pixels = imageData.data;
 
             if (previousPixels && !captureCooldown) {
@@ -541,7 +582,8 @@
                     if (rDiff + gDiff + bDiff > 120) diffCount++;
                 }
 
-                if (diffCount > (canvas.height * 0.10)) {
+                // Pengesanan: Jika 8% dari piksel "zon dada" berubah (sebab pelari masuk frame)
+                if (diffCount > (chestHeight * 0.08)) {
                     captureFinish();
                     captureCooldown = true; 
                     setTimeout(() => { captureCooldown = false; }, 800); 
@@ -568,15 +610,18 @@
 
             const sortedResults = [...results].sort((a, b) => parseFloat(a.time) - parseFloat(b.time));
             
-            let html = '<div class="grid grid-cols-3 gap-2 md:gap-4 w-full">';
+            let html = '<div class="grid grid-cols-3 gap-2 w-full">';
             const medals = ['🥇 PERTAMA', '🥈 KEDUA', '🥉 KETIGA'];
             const colors = ['text-yellow-400 border-yellow-500/30 bg-yellow-900/20', 'text-slate-300 border-slate-400/30 bg-slate-800/50', 'text-amber-600 border-amber-700/30 bg-amber-900/20'];
 
             for(let i=0; i<Math.min(3, sortedResults.length); i++) {
+                // Skrin penuh besarkan teks sikit
+                const textSize = isFullScreen ? 'text-2xl' : 'text-lg';
+                
                 html += `
                     <div class="rounded-xl border p-2 md:p-4 text-center flex flex-col items-center justify-center ${colors[i]}">
                         <span class="text-[10px] md:text-xs font-bold uppercase mb-1">${medals[i]}</span>
-                        <span class="text-lg md:text-2xl font-black font-mono">${sortedResults[i].time}s</span>
+                        <span class="${textSize} md:text-3xl font-black font-mono">${sortedResults[i].time}s</span>
                         <span class="text-[10px] md:text-xs text-slate-400 mt-1">Rekod #${sortedResults[i].pos}</span>
                     </div>
                 `;
@@ -595,21 +640,27 @@
                 return;
             }
 
-            tbody.innerHTML = results.map((r, index) => `
+            tbody.innerHTML = results.map((r, index) => {
+                const textSize = isFullScreen ? 'text-lg' : 'text-sm';
+                const inputSize = isFullScreen ? 'text-xl w-28 p-2' : 'text-base w-20 p-1';
+                const imgSize = isFullScreen ? 'h-20' : 'h-12';
+                
+                return `
                 <tr class="border-b border-slate-700/50 bg-slate-800/40 hover:bg-slate-700/60 transition-colors">
-                    <td class="py-3 px-3 font-bold text-slate-400 text-sm w-16 md:text-lg">#${r.pos}</td>
+                    <td class="py-3 px-3 font-bold text-slate-400 ${textSize} w-16">#${r.pos}</td>
                     <td class="px-2 w-32 md:w-48">
                         <input type="number" step="0.01" value="${r.time}" 
                             onchange="updateRecordTime(${index}, this.value)"
-                            class="w-20 md:w-28 bg-slate-900 border border-slate-600 text-yellow-300 font-mono font-bold text-base md:text-xl p-1 md:p-2 rounded focus:ring-2 focus:ring-yellow-500 outline-none">
+                            class="${inputSize} bg-slate-900 border border-slate-600 text-yellow-300 font-mono font-bold rounded focus:ring-2 focus:ring-yellow-500 outline-none">
                     </td>
                     <td class="py-2 px-2 text-center flex justify-center">
                         <div class="inline-block relative rounded border border-slate-600 overflow-hidden shadow-sm group cursor-pointer hover:border-yellow-400 transition-colors" onclick="window.open('${r.img}')">
-                            <img src="${r.img}" class="h-12 md:h-20 w-auto object-cover">
+                            <img src="${r.img}" class="${imgSize} w-auto object-cover">
                         </div>
                     </td>
                 </tr>
-            `).join('');
+                `;
+            }).join('');
             
             tbody.parentElement.parentElement.scrollTop = tbody.parentElement.parentElement.scrollHeight;
             updateSummary();
