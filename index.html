@@ -184,14 +184,14 @@
                             </tr>
                         </thead>
                         <tbody id="results-table">
-                            </tbody>
+                        </tbody>
                     </table>
                 </div>
 
                 <div class="border-t border-slate-600 pt-4 mb-4">
                     <h4 class="text-center text-sm font-bold text-yellow-400 mb-3 uppercase tracking-wider">🏆 Rumusan Pemenang</h4>
                     <div id="winner-summary" class="min-h-[80px] flex items-center justify-center">
-                        </div>
+                    </div>
                 </div>
                 
                 <button onclick="exportPDF()" class="w-full bg-white text-slate-900 font-black p-4 rounded-xl hover:bg-slate-200 transition-colors shadow-lg shadow-white/10 flex justify-center items-center gap-2 md:text-lg">
@@ -291,9 +291,7 @@
                 alert("Sila masukkan kod kejohanan!");
                 return;
             }
-            
             currentRoom = input.replace(/\s+/g, '');
-            
             document.getElementById('section-lobby').classList.add('hidden');
             document.getElementById('mode-selector').classList.remove('hidden');
             document.getElementById('btn-change-room').classList.remove('hidden');
@@ -305,7 +303,6 @@
             currentMode = mode;
             document.getElementById('mode-selector').classList.add('hidden');
             document.getElementById(`section-${mode}`).classList.remove('hidden');
-            
             if(mode === 'finish') {
                 initCamera();
                 listenToStart(); 
@@ -404,9 +401,7 @@
         }
 
         function triggerStart() {
-            db.ref(`tournaments/${currentRoom}/start`).set({ 
-                timestamp: firebase.database.ServerValue.TIMESTAMP 
-            });
+            db.ref(`tournaments/${currentRoom}/start`).set({ timestamp: firebase.database.ServerValue.TIMESTAMP });
         }
 
         // ==========================================
@@ -444,7 +439,6 @@
                     results = [];
                     renderTable();
                     
-                    // Clear AI Canvas
                     const canvas = document.getElementById('ai-overlay');
                     const ctx = canvas.getContext('2d');
                     ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -479,7 +473,6 @@
             
             if(autoCaptureActive) toggleAutoCapture(); 
             
-            // Clear AI Canvas
             const canvas = document.getElementById('ai-overlay');
             const ctx = canvas.getContext('2d');
             ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -499,7 +492,6 @@
             canvas.height = video.videoHeight;
             const ctx = canvas.getContext('2d');
             
-            // Draw video frame (Hanya Video, rangka hijau AI tidak akan masuk gambar rasmi)
             ctx.drawImage(video, 0, 0);
             
             const centerX = canvas.width / 2;
@@ -525,7 +517,6 @@
             renderTable();
         }
 
-        // --- INTELLIGENT AI LOAD & TOGGLE ---
         async function initPoseAI() {
             isAILoading = true;
             const model = poseDetection.SupportedModels.MoveNet;
@@ -539,7 +530,6 @@
             const btn = document.getElementById('auto-btn');
             
             if (!autoCaptureActive) {
-                // Nak Turn ON
                 if(!poseDetector && !isAILoading) {
                     btn.innerHTML = `<span class="text-lg animate-spin">⏳</span><span>Muat Turun AI...</span>`;
                     btn.disabled = true;
@@ -551,15 +541,13 @@
                 btn.innerHTML = `<span class="text-lg animate-spin">⚙️</span><span>AI AUTO: ON</span>`;
                 btn.className = "bg-gradient-to-b from-emerald-500 to-emerald-700 border border-emerald-400/30 font-bold py-3 px-2 rounded-xl text-sm transition-all shadow-lg shadow-emerald-900/50 flex flex-col items-center justify-center gap-1 text-white";
                 
-                processAIVideoFrame(); // Mula loop AI
+                processAIVideoFrame(); 
                 
             } else {
-                // Nak Turn OFF
                 autoCaptureActive = false;
                 btn.innerHTML = `<span class="text-lg">🤖</span><span>AI AUTO: OFF</span>`;
                 btn.className = "bg-gradient-to-b from-purple-500 to-purple-700 border border-purple-400/30 hover:from-purple-400 hover:to-purple-600 font-bold py-3 px-2 rounded-xl text-sm transition-all shadow-lg active:scale-95 flex flex-col items-center justify-center gap-1 text-white";
                 
-                // Clear AI Canvas bila dimatikan
                 const canvas = document.getElementById('ai-overlay');
                 if (canvas) {
                     const ctx = canvas.getContext('2d');
@@ -568,7 +556,7 @@
             }
         }
 
-        // --- PENGESANAN AI (TORSO DETECTION RULE) ---
+        // --- LOGIK AI YANG DIPERBAIKI (SOKONGAN PANDANGAN SISI) ---
         async function processAIVideoFrame() {
             if (!autoCaptureActive) return; 
 
@@ -576,68 +564,56 @@
             const aiCanvas = document.getElementById('ai-overlay');
             const ctx = aiCanvas.getContext('2d');
             
-            // Samakan saiz kanvas lukisan dengan resolusi video asal
             if (aiCanvas.width !== video.videoWidth) {
                 aiCanvas.width = video.videoWidth;
                 aiCanvas.height = video.videoHeight;
             }
 
             if (video.videoWidth === 0 || !startTime || isRaceStopped || !poseDetector) { 
-                ctx.clearRect(0, 0, aiCanvas.width, aiCanvas.height); // Padam lukisan jika sistem belum jalan
+                ctx.clearRect(0, 0, aiCanvas.width, aiCanvas.height);
                 requestAnimationFrame(processAIVideoFrame);
                 return;
             }
 
             try {
-                // Dapatkan struktur rangka pelari
                 const poses = await poseDetector.estimatePoses(video);
                 ctx.clearRect(0, 0, aiCanvas.width, aiCanvas.height);
 
                 if (poses.length > 0) {
                     const keypoints = poses.keypoints;
 
-                    // Ekstrak titik penting torso (dada/badan): 5:L_Shoulder, 6:R_Shoulder, 11:L_Hip, 12:R_Hip
+                    // TITIK PENTING (DADA/TORSO): 5:Bahu Kiri, 6:Bahu Kanan, 11:Pinggul Kiri, 12:Pinggul Kanan
+                    // Untuk rakaman dari tepi, AI biasanya hanya nampak separuh badan dengan jelas.
+                    // Oleh itu, kita tapis mana-mana titik torso yang AI nampak sahaja (keyakinan > 0.2)
                     const torsoPoints = [keypoints, keypoints, keypoints, keypoints]
-                                        .filter(p => p != null && p.score > 0.3); // Pastikan AI yakin titik tu betul
+                                        .filter(p => p != null && p.score > 0.2); 
 
-                    // LUKIS KOTAK/TITIK DADA UNTUK MAKLUMBALAS VISUAL KEPADA PENGGUNA
-                    if (torsoPoints.length > 0) {
-                        ctx.fillStyle = '#10b981'; // Tailwind emerald-500
-                        ctx.strokeStyle = '#10b981';
+                    // Asalkan AI jumpa sekurang-kurangnya 1 titik pada bahagian badan
+                    if (torsoPoints.length >= 1) {
+                        ctx.strokeStyle = '#10b981'; // Hijau
                         ctx.lineWidth = 4;
 
-                        // Lukis titik sendi dada
-                        torsoPoints.forEach(p => {
-                            ctx.beginPath();
-                            ctx.arc(p.x, p.y, 6, 0, 2 * Math.PI);
-                            ctx.fill();
-                        });
+                        // Cari purata kedudukan X (tengah-tengah dada yang jelas dilihat)
+                        const avgX = torsoPoints.reduce((sum, p) => sum + p.x, 0) / torsoPoints.length;
+                        
+                        // Lukis Garisan AI Menegak mengekori badan pelari
+                        ctx.beginPath();
+                        ctx.moveTo(avgX, 0);
+                        ctx.lineTo(avgX, aiCanvas.height);
+                        ctx.stroke();
 
-                        // Jika cukup 4 titik, lukis garisan sambungan dada (kotak torso)
-                        if (torsoPoints.length === 4) {
-                            ctx.beginPath();
-                            ctx.moveTo(torsoPoints.x, torsoPoints.y); // L Shoulder
-                            ctx.lineTo(torsoPoints.x, torsoPoints.y); // R Shoulder
-                            ctx.lineTo(torsoPoints.x, torsoPoints.y); // R Hip
-                            ctx.lineTo(torsoPoints.x, torsoPoints.y); // L Hip
-                            ctx.closePath();
-                            ctx.stroke();
-                        }
-
-                        // PENGIRAAN TRIGGER (Adakah Dada melepasi garisan penamat?)
+                        // PENGIRAAN TRIGGER (Adakah badan melepasi garisan tengah?)
                         if (!captureCooldown) {
-                            const avgX = torsoPoints.reduce((sum, p) => sum + p.x, 0) / torsoPoints.length;
                             const finishLineX = video.videoWidth / 2;
-                            
-                            // Ambang toleransi (Contoh: Dalam radius 6% dari garisan tengah)
-                            const triggerThreshold = video.videoWidth * 0.06;
+                            // Tambah sikit lebar sensitiviti tangkapan (8% daripada skrin)
+                            const triggerThreshold = video.videoWidth * 0.08;
 
                             if (Math.abs(avgX - finishLineX) < triggerThreshold) {
                                 captureFinish();
                                 captureCooldown = true; 
                                 
-                                // Tukar warna lukisan ke merah sekejap untuk tanda ia ditangkap!
-                                ctx.strokeStyle = 'red';
+                                // Tukar warna garisan kepada Merah tanda "DITANGKAP"
+                                ctx.strokeStyle = '#ef4444'; 
                                 ctx.stroke();
 
                                 setTimeout(() => { captureCooldown = false; }, 800); 
@@ -649,7 +625,6 @@
                 console.warn("AI Frame Skip: ", err);
             }
 
-            // Loop ke frame seterusnya (Menggunakan requestAnimationFrame mengekalkan kelancaran browser)
             requestAnimationFrame(processAIVideoFrame);
         }
 
