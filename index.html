@@ -3,11 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sprint Timer Pro - Photo Finish</title>
+    <title>Sprint Timer Pro - Slit Scan Photo Finish</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
+    
     <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-database-compat.js"></script>
+    
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     
     <style>
@@ -20,29 +22,14 @@
             background-color: rgba(239, 68, 68, 0.9);
             transform: translateX(-50%);
             z-index: 10;
+            box-shadow: 0 0 5px rgba(239, 68, 68, 0.8);
         }
-        
-        /* Reticle/Sasaran untuk Dada Pelari */
-        .torso-target {
-            position: absolute;
-            top: 35%;
-            bottom: 35%;
-            left: 50%;
-            width: 40px;
-            transform: translateX(-50%);
-            border-top: 3px solid rgba(250, 204, 21, 0.8);
-            border-bottom: 3px solid rgba(250, 204, 21, 0.8);
-            border-left: 1px solid rgba(250, 204, 21, 0.3);
-            border-right: 1px solid rgba(250, 204, 21, 0.3);
-            background-color: rgba(250, 204, 21, 0.1);
-            z-index: 11;
-            pointer-events: none;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            box-shadow: 0 0 15px rgba(250, 204, 21, 0.2);
+        .slit-canvas-view {
+            height: 250px;
+            width: auto;
+            max-width: none;
+            touch-action: pan-x pan-y;
         }
-
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
         .glass-panel {
@@ -67,7 +54,7 @@
             <h1 class="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-orange-500 tracking-wider flex items-center justify-center gap-2">
                 ⚡ SPRINT TIMER
             </h1>
-            <p class="text-slate-400 text-sm tracking-widest uppercase mt-1">Sistem Photo Finish Optikal</p>
+            <p class="text-slate-400 text-sm tracking-widest uppercase mt-1">Slit-Scan Photo Finish (60FPS)</p>
             
             <div id="room-badge" class="hidden mt-3">
                 <span class="bg-blue-900/50 text-blue-300 border border-blue-500/50 px-3 py-1 rounded-full text-xs font-bold tracking-widest">
@@ -152,7 +139,7 @@
                     </button>
                 </div>
 
-                <div class="absolute top-0 left-0 bg-red-600 text-white text-[10px] font-bold px-3 py-1 rounded-br-lg rounded-tl-3xl tracking-wider hidden z-20" id="live-indicator">LIVE REC</div>
+                <div class="absolute top-0 left-0 bg-red-600 text-white text-[10px] font-bold px-3 py-1 rounded-br-lg rounded-tl-3xl tracking-wider hidden z-20 animate-pulse" id="live-indicator">REC SLIT-SCAN</div>
                 
                 <div id="stopwatch" class="text-7xl font-black text-center py-2 text-transparent bg-clip-text bg-gradient-to-b from-white to-slate-400 tracking-wider font-mono shadow-sm transition-all duration-300">00:00<span class="text-4xl text-yellow-400">.00</span></div>
                 
@@ -160,25 +147,23 @@
                     <video id="webcam" autoplay playsinline class="w-full object-cover aspect-video"></video>
                     
                     <div class="finish-line-overlay"></div>
-
-                    <div class="torso-target">
-                        <span style="writing-mode: vertical-rl; text-orientation: mixed;" class="text-[9px] font-bold text-yellow-400 tracking-widest">ARAS DADA</span>
-                    </div>
                 </div>
 
-                <div class="grid grid-cols-2 gap-3 mb-4">
-                    <button id="auto-btn" onclick="toggleAutoCapture()" class="bg-gradient-to-b from-purple-500 to-purple-700 border border-purple-400/30 hover:from-purple-400 hover:to-purple-600 font-bold py-3 px-2 rounded-xl text-sm transition-all shadow-lg active:scale-95 flex flex-col items-center justify-center gap-1">
-                        <span class="text-lg">🤖</span>
-                        <span>AUTO: OFF</span>
-                    </button>
-                    <button onclick="captureFinish()" class="bg-gradient-to-b from-yellow-400 to-yellow-600 border border-yellow-300/30 text-black hover:from-yellow-300 hover:to-yellow-500 font-black py-3 px-2 rounded-xl text-sm shadow-lg active:scale-95 transition-all flex flex-col items-center justify-center gap-1">
-                        <span class="text-lg">📸</span>
-                        <span>SNAP MANUAL</span>
+                <div class="mb-4">
+                    <button id="btn-slit-scan" onclick="toggleSlitScan()" class="w-full bg-gradient-to-b from-blue-500 to-blue-700 hover:from-blue-400 hover:to-blue-600 font-bold py-4 rounded-xl text-lg shadow-lg active:scale-95 transition-all text-white border border-blue-400/30">
+                        🔴 MULA RAKAM SLIT-SCAN
                     </button>
                 </div>
                 
+                <div id="preview-container" class="hidden bg-slate-800/80 p-3 rounded-xl mb-4 border border-slate-600 shadow-inner">
+                    <p class="text-xs text-yellow-400 mb-2 font-bold animate-pulse text-center tracking-wide">👆 LERET & KLIK PADA DADA PELARI DALAM GAMBAR INI UNTUK TANDA MASA</p>
+                    <div class="overflow-x-auto no-scrollbar border border-slate-700 rounded bg-black">
+                        <canvas id="slit-preview-canvas" class="slit-canvas-view cursor-crosshair"></canvas>
+                    </div>
+                </div>
+
                 <button id="stop-btn" onclick="stopRace()" class="w-full bg-slate-700 hover:bg-slate-600 text-red-400 font-bold p-4 rounded-xl shadow-lg border border-slate-600 transition-colors flex items-center justify-center gap-2">
-                    🛑 HENTIKAN JAM & AUTO
+                    🛑 HENTIKAN JAM & RESET
                 </button>
             </div>
 
@@ -194,9 +179,10 @@
                     <table class="w-full text-left text-sm whitespace-nowrap">
                         <thead class="sticky top-0 bg-slate-800 z-10 shadow-sm">
                             <tr class="text-slate-400 text-xs uppercase tracking-wider">
-                                <th class="py-3 px-3">Rekod</th>
-                                <th class="px-2">Masa(s) - Boleh Edit</th>
+                                <th class="py-3 px-3">#</th>
+                                <th class="px-2">Masa(s)</th>
                                 <th class="px-2 text-center">Photo Finish</th>
+                                <th class="px-2 text-center">Buang</th>
                             </tr>
                         </thead>
                         <tbody id="results-table">
@@ -252,11 +238,14 @@
         let audioContext, analyser, dataArray;
         let currentThreshold = 70; 
 
-        // Auto-Capture (Optical)
-        let autoCaptureActive = false;
-        let previousPixels = null;
-        let captureCooldown = false;
-        let autoCaptureReqId;
+        // Slit-Scan Variables
+        let isRecordingSlit = false;
+        let slitCanvas = document.createElement('canvas'); // Master raw image
+        let slitCtx = slitCanvas.getContext('2d');
+        let currentSliceX = 0;
+        let sliceWidth = 3; // Ketebalan 3 piksel per frame (sesuai untuk 60fps)
+        let sliceData = []; // Simpan mapping koodinat X kepada Masa
+        let marks = []; // Simpan tanda (clicks) yang dibuat oleh hakim
 
         // --- 3. OFFSET MASA PELAYAN ---
         db.ref('.info/serverTimeOffset').on('value', function(snapshot) {
@@ -281,6 +270,7 @@
             const fsBtnText = document.getElementById('fs-btn-text');
             const stopwatch = document.getElementById('stopwatch');
             const tableContainer = document.getElementById('table-container');
+            const slitCanvasView = document.getElementById('slit-preview-canvas');
             
             if (document.fullscreenElement) {
                 isFullScreen = true;
@@ -289,6 +279,7 @@
                 fsBtnText.innerText = "Keluar Paparan Penuh";
                 stopwatch.classList.replace('text-7xl', 'text-9xl');
                 tableContainer.classList.replace('max-h-64', 'max-h-[500px]');
+                slitCanvasView.style.height = '400px';
             } else {
                 isFullScreen = false;
                 container.classList.add('max-w-md');
@@ -296,6 +287,7 @@
                 fsBtnText.innerText = "Paparan Penuh Desktop";
                 stopwatch.classList.replace('text-9xl', 'text-7xl');
                 tableContainer.classList.replace('max-h-[500px]', 'max-h-64');
+                slitCanvasView.style.height = '250px';
             }
         });
 
@@ -420,7 +412,7 @@
         }
 
         // ==========================================
-        // FINISH MODE
+        // FINISH MODE (SLIT-SCAN / MANUAL MARK)
         // ==========================================
         async function initCamera() {
             try {
@@ -439,10 +431,10 @@
                 if(data && data.timestamp) {
                     startTime = data.timestamp;
                     isRaceStopped = false;
-                    document.getElementById('live-indicator').classList.remove('hidden');
                     cancelAnimationFrame(stopwatchReqId);
                     updateStopwatch();
                 } else {
+                    // System Reset
                     startTime = null;
                     isRaceStopped = true;
                     document.getElementById('live-indicator').classList.add('hidden');
@@ -451,9 +443,14 @@
                     const msSize = isFullScreen ? 'text-6xl' : 'text-4xl';
                     document.getElementById('stopwatch').innerHTML = `00:00<span class="${msSize} text-yellow-400">.00</span>`;
                     
+                    if (isRecordingSlit) toggleSlitScan(); // Matikan rakaman jika sedang on
+                    
                     results = [];
+                    marks = [];
+                    currentSliceX = 0;
+                    sliceData = [];
+                    document.getElementById('preview-container').classList.add('hidden');
                     renderTable();
-                    previousPixels = null;
                 }
             });
         }
@@ -482,122 +479,202 @@
             isRaceStopped = true;
             document.getElementById('live-indicator').classList.add('hidden');
             cancelAnimationFrame(stopwatchReqId);
-            if(autoCaptureActive) toggleAutoCapture(); 
+            
+            if (isRecordingSlit) toggleSlitScan(); // Auto Stop and preview
         }
 
-        function captureFinish() {
-            if(!startTime) return alert("Perlumbaan belum bermula!");
+        // --- SLIT SCAN LOGIC (PENGGANTI AUTO CAPTURE) ---
+        function toggleSlitScan() {
+            if(!startTime) return alert("Sistem masih menunggu tembakan pelepas! Perlumbaan belum bermula.");
+            
+            const btn = document.getElementById('btn-slit-scan');
+            
+            if(!isRecordingSlit) {
+                // START RECORDING STACKS
+                isRecordingSlit = true;
+                
+                const video = document.getElementById('webcam');
+                slitCanvas.width = 4000; // peruntukan awal
+                slitCanvas.height = video.videoHeight || 480;
+                currentSliceX = 0;
+                sliceData = [];
+                marks = [];
+                
+                btn.innerHTML = `⏹ HENTIKAN RAKAMAN SLIT-SCAN`;
+                btn.className = "w-full bg-gradient-to-b from-red-500 to-red-700 hover:from-red-400 hover:to-red-600 font-bold py-4 rounded-xl text-lg shadow-lg active:scale-95 transition-all mb-4 text-white border border-red-400/30";
+                
+                document.getElementById('preview-container').classList.remove('hidden');
+                document.getElementById('live-indicator').classList.remove('hidden');
+                
+                processSlitFrame();
+            } else {
+                // STOP RECORDING STACKS
+                isRecordingSlit = false;
+                
+                btn.innerHTML = `🔴 MULA RAKAM SLIT-SCAN (Bila Pelari Hampir)`;
+                btn.className = "w-full bg-gradient-to-b from-blue-500 to-blue-700 hover:from-blue-400 hover:to-blue-600 font-bold py-4 rounded-xl text-lg shadow-lg active:scale-95 transition-all mb-4 text-white border border-blue-400/30";
+                
+                document.getElementById('live-indicator').classList.add('hidden');
+                
+                renderFinalSlitScanWithMarks();
+            }
+        }
+
+        function processSlitFrame() {
+            if (!isRecordingSlit || isRaceStopped) return;
+            
+            const video = document.getElementById('webcam');
+            if (video.videoWidth === 0) return requestAnimationFrame(processSlitFrame);
+            
+            if(slitCanvas.height !== video.videoHeight) slitCanvas.height = video.videoHeight;
+            
+            // Auto panjangkan kanvas jika dah hampir penuh (sangat efisien)
+            if (currentSliceX + sliceWidth >= slitCanvas.width) {
+                let temp = document.createElement('canvas');
+                temp.width = slitCanvas.width;
+                temp.height = slitCanvas.height;
+                temp.getContext('2d').drawImage(slitCanvas, 0, 0);
+                slitCanvas.width += 3000;
+                slitCtx.drawImage(temp, 0, 0);
+            }
             
             const currentServerTime = Date.now() + serverOffset;
             let diff = (currentServerTime - startTime) / 1000;
             if(diff < 0) diff = 0;
-            const timeTaken = diff.toFixed(2);
             
-            const video = document.getElementById('webcam');
-            const canvas = document.createElement('canvas');
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
-            const ctx = canvas.getContext('2d');
+            const centerX = Math.floor(video.videoWidth / 2);
             
-            ctx.drawImage(video, 0, 0);
+            // Ambil 1 garisan halus dari tengah video dan lukis (stack) pada kanvas
+            slitCtx.drawImage(video, centerX, 0, sliceWidth, video.videoHeight, currentSliceX, 0, sliceWidth, slitCanvas.height);
             
-            const centerX = canvas.width / 2;
+            // Simpan masa bagi koodinat X ini
+            sliceData.push({ x: currentSliceX, time: diff.toFixed(2) });
+            currentSliceX += sliceWidth;
+            
+            // Kemaskini preview secara live (setiap 6 frame supaya tak berat)
+            if (sliceData.length % 6 === 0) {
+                renderFinalSlitScanWithMarks();
+            }
+            
+            requestAnimationFrame(processSlitFrame);
+        }
 
-            ctx.fillStyle = "rgba(239, 68, 68, 0.9)";
-            ctx.fillRect(centerX - 2, 0, 4, canvas.height);
+        function renderFinalSlitScanWithMarks() {
+            const previewCanvas = document.getElementById('slit-preview-canvas');
+            const pCtx = previewCanvas.getContext('2d');
+            
+            if (currentSliceX === 0) return;
+            
+            // Samakan lebar preview dengan jumlah rakaman
+            previewCanvas.width = currentSliceX;
+            previewCanvas.height = slitCanvas.height;
+            
+            pCtx.drawImage(slitCanvas, 0, 0, currentSliceX, slitCanvas.height, 0, 0, currentSliceX, slitCanvas.height);
+            
+            // Lukis semula tanda masa (garisan merah) yang telah di-klik hakim
+            marks.forEach(m => {
+                pCtx.strokeStyle = "red";
+                pCtx.lineWidth = 4;
+                pCtx.beginPath();
+                pCtx.moveTo(m.x, 0);
+                pCtx.lineTo(m.x, previewCanvas.height);
+                pCtx.stroke();
+                
+                pCtx.fillStyle = "rgba(0,0,0,0.8)";
+                pCtx.fillRect(m.x - 40, 20, 80, 40);
+                pCtx.fillStyle = "white";
+                pCtx.font = "bold 24px Arial";
+                pCtx.textAlign = "center";
+                pCtx.fillText(m.time + "s", m.x, 48);
+            });
+        }
 
-            const boxWidth = canvas.width * 0.15 > 120 ? canvas.width * 0.15 : 120;
-            const fontSize = canvas.height * 0.05 > 24 ? canvas.height * 0.05 : 24;
+        // --- SISTEM TANDA (KLIK/TOUCH KANVAS OLEH HAKIM) ---
+        const previewCanvas = document.getElementById('slit-preview-canvas');
+        previewCanvas.addEventListener('click', function(e) {
+            if(isRecordingSlit) return alert("Sila hentikan rakaman terlebih dahulu sebelum menanda masa.");
+            if(currentSliceX === 0) return;
+            
+            // Kira tepat koordinat X yang ditekan berdasarkan skala CSS skrin
+            const rect = previewCanvas.getBoundingClientRect();
+            const scaleX = previewCanvas.width / rect.width;
+            const clickX = (e.clientX - rect.left) * scaleX;
+            
+            // Cari masa rakaman terdekat dengan titik X
+            let markedTime = "0.00";
+            for(let i=0; i<sliceData.length; i++) {
+                if(sliceData[i].x >= clickX) {
+                    markedTime = sliceData[i].time;
+                    break;
+                }
+            }
+            
+            // Konfirmasi dan masuk ke jadual
+            if(confirm(`Sahkan penamat pada masa: ${markedTime}s ?`)) {
+                addResultMark(clickX, markedTime);
+            }
+        });
 
-            ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
+        function addResultMark(clickX, time) {
+            // Potong sebahagian gambar untuk dijadikan rujukan (Proof)
+            const cropWidth = 400; // lebar gambar bukti
+            const startX = Math.max(0, clickX - cropWidth / 2);
+            const actualCropWidth = Math.min(cropWidth, currentSliceX - startX);
+            
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = actualCropWidth;
+            tempCanvas.height = slitCanvas.height;
+            const ctx = tempCanvas.getContext('2d');
+            
+            ctx.drawImage(slitCanvas, startX, 0, actualCropWidth, slitCanvas.height, 0, 0, actualCropWidth, slitCanvas.height);
+            
+            // Lukis garisan dan masa atas bukti
+            const lineX = clickX - startX;
+            ctx.strokeStyle = "red";
+            ctx.lineWidth = 4;
             ctx.beginPath();
-            ctx.roundRect(centerX - (boxWidth/2), 10, boxWidth, fontSize * 1.5, 8);
-            ctx.fill();
-
-            ctx.font = `bold ${fontSize}px Arial`;
-            ctx.fillStyle = "#ffffff";
+            ctx.moveTo(lineX, 0);
+            ctx.lineTo(lineX, tempCanvas.height);
+            ctx.stroke();
+            
+            ctx.fillStyle = "rgba(0,0,0,0.8)";
+            ctx.fillRect(lineX - 40, 20, 80, 40);
+            ctx.fillStyle = "white";
+            ctx.font = "bold 24px Arial";
             ctx.textAlign = "center";
-            ctx.fillText(timeTaken, centerX, 10 + (fontSize * 1.1));
-
-            const imgData = canvas.toDataURL('image/jpeg', 0.7); 
-            results.push({ pos: results.length + 1, time: timeTaken, img: imgData });
+            ctx.fillText(time + "s", lineX, 48);
+            
+            const imgData = tempCanvas.toDataURL('image/jpeg', 0.8);
+            
+            marks.push({ x: clickX, time: time });
+            
+            results.push({
+                time: time,
+                img: imgData
+            });
+            
+            renderFinalSlitScanWithMarks();
             renderTable();
         }
 
-        function toggleAutoCapture() {
-            autoCaptureActive = !autoCaptureActive;
-            const btn = document.getElementById('auto-btn');
-            
-            if(autoCaptureActive) {
-                btn.innerHTML = `<span class="text-lg animate-spin">⚙️</span><span>AUTO: ON</span>`;
-                btn.className = "bg-gradient-to-b from-emerald-500 to-emerald-700 border border-emerald-400/30 font-bold py-3 px-2 rounded-xl text-sm transition-all shadow-lg shadow-emerald-900/50 flex flex-col items-center justify-center gap-1 text-white";
-                previousPixels = null;
-                processOpticalVideoFrame();
-            } else {
-                btn.innerHTML = `<span class="text-lg">🤖</span><span>AUTO: OFF</span>`;
-                btn.className = "bg-gradient-to-b from-purple-500 to-purple-700 border border-purple-400/30 hover:from-purple-400 hover:to-purple-600 font-bold py-3 px-2 rounded-xl text-sm transition-all shadow-lg active:scale-95 flex flex-col items-center justify-center gap-1 text-white";
-                cancelAnimationFrame(autoCaptureReqId);
-            }
-        }
-
-        // --- PENGESANAN OPTIKAL BERFOKUS (DADA SAHAJA) ---
-        function processOpticalVideoFrame() {
-            if (!autoCaptureActive) return; 
-
-            const video = document.getElementById('webcam');
-            
-            if (video.videoWidth === 0 || !startTime || isRaceStopped) { 
-                previousPixels = null; 
-                autoCaptureReqId = requestAnimationFrame(processOpticalVideoFrame);
-                return;
-            }
-
-            const canvas = document.createElement('canvas');
-            const ctx = canvas.getContext('2d', { willReadFrequently: true });
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
-            ctx.drawImage(video, 0, 0);
-
-            // Fokus pada kawasan sasaran (Reticle) di tengah
-            // Mengikut CSS: top 35%, bottom 35% bererti ketinggian adalah 30% di tengah
-            const lineX = Math.floor(canvas.width / 2);
-            const targetStartY = Math.floor(canvas.height * 0.35);
-            const targetHeight = Math.floor(canvas.height * 0.30);
-
-            // Baca piksel HANYA dari zon sasaran dada ini
-            const imageData = ctx.getImageData(lineX, targetStartY, 1, targetHeight);
-            const pixels = imageData.data;
-
-            if (previousPixels && !captureCooldown) {
-                let diffCount = 0;
-                for (let i = 0; i < pixels.length; i += 4) {
-                    const rDiff = Math.abs(pixels[i] - previousPixels[i]);
-                    const gDiff = Math.abs(pixels[i+1] - previousPixels[i+1]);
-                    const bDiff = Math.abs(pixels[i+2] - previousPixels[i+2]);
-                    
-                    // Ambang sensitiviti warna (perbezaan objek yang melintas dengan latar belakang)
-                    if (rDiff + gDiff + bDiff > 100) diffCount++;
-                }
-
-                // Jika 10% daripada zon sasaran bertukar warna (dada pelari melintas)
-                if (diffCount > (targetHeight * 0.10)) {
-                    captureFinish();
-                    captureCooldown = true; 
-                    
-                    // Elakkan spam gambar untuk pelari yang sama (delay 0.8s)
-                    setTimeout(() => { captureCooldown = false; }, 800); 
-                }
-            }
-            
-            previousPixels = new Uint8ClampedArray(pixels);
-            autoCaptureReqId = requestAnimationFrame(processOpticalVideoFrame);
-        }
-
-        // --- FINE TUNE & UPDATE SUMMARY ---
+        // --- FINE TUNE, PADAM & KEMASKINI UI ---
         function updateRecordTime(index, newTime) {
             if(results[index]) {
                 results[index].time = parseFloat(newTime).toFixed(2);
                 updateSummary();
+            }
+        }
+
+        function deleteResult(index) {
+            if(confirm("Padam rekod ini?")) {
+                const timeToDel = results[index].time;
+                results.splice(index, 1);
+                
+                // Buang juga dari senarai "marks" garisan merah
+                marks = marks.filter(m => m.time !== timeToDel);
+                
+                renderTable();
+                renderFinalSlitScanWithMarks();
             }
         }
 
@@ -608,7 +685,8 @@
                 return;
             }
 
-            const sortedResults = [...results].sort((a, b) => parseFloat(a.time) - parseFloat(b.time));
+            // Susun masa untuk top 3
+            const sortedResults = [...results].map((r, i) => ({...r, originalIndex: i})).sort((a, b) => parseFloat(a.time) - parseFloat(b.time));
             
             let html = '<div class="grid grid-cols-3 gap-2 md:gap-4 w-full">';
             const medals = ['🥇 PERTAMA', '🥈 KEDUA', '🥉 KETIGA'];
@@ -621,7 +699,7 @@
                     <div class="rounded-xl border p-2 md:p-4 text-center flex flex-col items-center justify-center ${colors[i]}">
                         <span class="text-[10px] md:text-xs font-bold uppercase mb-1">${medals[i]}</span>
                         <span class="${textSize} md:text-3xl font-black font-mono">${sortedResults[i].time}s</span>
-                        <span class="text-[10px] md:text-xs text-slate-400 mt-1">Rekod #${sortedResults[i].pos}</span>
+                        <span class="text-[10px] md:text-xs text-slate-400 mt-1">Rekod #${sortedResults[i].originalIndex + 1}</span>
                     </div>
                 `;
             }
@@ -634,7 +712,7 @@
             document.getElementById('result-count').innerText = results.length;
             
             if(results.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="3" class="text-center py-6 text-slate-500 italic text-sm">Tiada tangkapan dibuat lagi.</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="4" class="text-center py-6 text-slate-500 italic text-sm">Tiada tangkapan dibuat lagi.</td></tr>`;
                 updateSummary();
                 return;
             }
@@ -646,7 +724,7 @@
                 
                 return `
                 <tr class="border-b border-slate-700/50 bg-slate-800/40 hover:bg-slate-700/60 transition-colors">
-                    <td class="py-3 px-3 font-bold text-slate-400 ${textSize} w-16">#${r.pos}</td>
+                    <td class="py-3 px-3 font-bold text-slate-400 ${textSize} w-16">#${index + 1}</td>
                     <td class="px-2 w-32 md:w-48">
                         <input type="number" step="0.01" value="${r.time}" 
                             onchange="updateRecordTime(${index}, this.value)"
@@ -656,6 +734,9 @@
                         <div class="inline-block relative rounded border border-slate-600 overflow-hidden shadow-sm group cursor-pointer hover:border-yellow-400 transition-colors" onclick="window.open('${r.img}')">
                             <img src="${r.img}" class="${imgSize} w-auto object-cover">
                         </div>
+                    </td>
+                    <td class="py-2 px-2 text-center">
+                        <button onclick="deleteResult(${index})" class="bg-red-500/20 hover:bg-red-500/50 text-red-400 border border-red-500/30 px-3 py-1 rounded text-xs font-bold transition-colors">X</button>
                     </td>
                 </tr>
                 `;
@@ -671,7 +752,7 @@
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF();
             
-            const sortedResults = [...results].sort((a, b) => parseFloat(a.time) - parseFloat(b.time));
+            const sortedResults = [...results].map((r, i) => ({...r, originalIndex: i})).sort((a, b) => parseFloat(a.time) - parseFloat(b.time));
 
             doc.setFont("helvetica", "bold");
             doc.setFontSize(22);
@@ -705,7 +786,7 @@
                 doc.setFontSize(10);
                 doc.setTextColor(100, 100, 100);
                 doc.setFont("helvetica", "normal");
-                doc.text(`(Tangkapan Sistem #${r.pos})`, 15, yPos + 22);
+                doc.text(`(Tangkapan Sistem #${r.originalIndex + 1})`, 15, yPos + 22);
                 
                 doc.setDrawColor(150, 150, 150);
                 doc.rect(70, yPos - 5, 80, 45); 
