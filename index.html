@@ -205,7 +205,7 @@
                 </div>
 
                 <p class="text-sm text-slate-300 mb-4 bg-blue-900/30 p-3 rounded-lg border border-blue-500/30">
-                    <span class="font-bold text-blue-400">ARAHAN:</span> Leret gambar di bawah ke kiri/kanan. Klik tepat pada <b>dada pelari</b> untuk menanda masa mereka. Gunakan butang +/- di bawah untuk memperhalusi (*fine-tune*) masa.
+                    <span class="font-bold text-blue-400">ARAHAN:</span> Leret gambar di bawah ke kiri/kanan. Klik tepat pada <b>dada pelari</b> untuk menanda masa mereka. Anda boleh melihat garisan putih memandu masa sebelum klik.
                 </p>
 
                 <div class="overflow-x-auto no-scrollbar border-2 border-slate-600 rounded-xl bg-black mb-6 shadow-inner relative">
@@ -257,7 +257,7 @@
         let currentMode = '';
         let startTime = null;
         let isArmed = false;
-        let results = []; // Simpanan Akhir
+        let results = []; 
         let stopwatchReqId;
         let isRaceStopped = true; 
         let serverOffset = 0; 
@@ -270,14 +270,16 @@
 
         // Slit-Scan Variables
         let isRecordingSlit = false;
-        let slitCanvas = document.createElement('canvas'); // Imej raw asal
+        let slitCanvas = document.createElement('canvas'); 
         let slitCtx = slitCanvas.getContext('2d');
         let currentSliceX = 0;
         let sliceWidth = 3; 
         let sliceData = []; 
         
         // Judging Panel Variables
-        let tempMarks = []; // Simpan marker sebelum ditekan 'Save'
+        let tempMarks = []; 
+        let hoverX = -1; // Koordinat X untuk hover panduan
+        let isHovering = false; // Flag status hover
 
         // --- 3. OFFSET MASA PELAYAN ---
         db.ref('.info/serverTimeOffset').on('value', function(snapshot) {
@@ -311,7 +313,7 @@
                 fsBtnText.innerText = "Keluar Paparan Penuh";
                 stopwatch.classList.replace('text-7xl', 'text-9xl');
                 tableContainer.classList.replace('max-h-64', 'max-h-[500px]');
-                judgeCanvas.style.height = '500px'; // Besarkan kanvas hakim
+                judgeCanvas.style.height = '500px'; 
             } else {
                 isFullScreen = false;
                 container.classList.add('max-w-md');
@@ -466,7 +468,6 @@
                     cancelAnimationFrame(stopwatchReqId);
                     updateStopwatch();
                 } else {
-                    // System Reset
                     startTime = null;
                     isRaceStopped = true;
                     document.getElementById('live-indicator').classList.add('hidden');
@@ -477,8 +478,6 @@
                     
                     if (isRecordingSlit) toggleSlitScan(); 
                     
-                    // Jangan clear results jika reset ditekan. Biarkan data lama dalam jadual.
-                    // reset ini hanya untuk timer.
                     currentSliceX = 0;
                     sliceData = [];
                 }
@@ -511,11 +510,10 @@
             const btn = document.getElementById('btn-slit-scan');
             
             if(!isRecordingSlit) {
-                // MULA RAKAM STACK (SLIT)
                 isRecordingSlit = true;
                 
                 const video = document.getElementById('webcam');
-                slitCanvas.width = 4000; // peruntukan awal panjang kanvas
+                slitCanvas.width = 4000; 
                 slitCanvas.height = video.videoHeight || 480;
                 currentSliceX = 0;
                 sliceData = [];
@@ -538,7 +536,6 @@
             
             if(slitCanvas.height !== video.videoHeight) slitCanvas.height = video.videoHeight;
             
-            // Auto expand canvas efficiently
             if (currentSliceX + sliceWidth >= slitCanvas.width) {
                 let temp = document.createElement('canvas');
                 temp.width = slitCanvas.width;
@@ -554,17 +551,14 @@
             
             const centerX = Math.floor(video.videoWidth / 2);
             
-            // Slice the center pixel line and stack it
             slitCtx.drawImage(video, centerX, 0, sliceWidth, video.videoHeight, currentSliceX, 0, sliceWidth, slitCanvas.height);
             
-            // Map X to Time
             sliceData.push({ x: currentSliceX, time: diff.toFixed(2) });
             currentSliceX += sliceWidth;
             
             requestAnimationFrame(processSlitFrame);
         }
 
-        // Action when user wants to stop and judge
         function stopAndProcess() {
             if(isRaceStopped && currentSliceX === 0) return alert("Tiada rakaman dibuat.");
             
@@ -588,20 +582,20 @@
         }
 
         // ==========================================
-        // SECTION: JUDGING PANEL LOGIC
+        // SECTION: JUDGING PANEL LOGIC (DENGAN HOVER)
         // ==========================================
         const judgeCanvas = document.getElementById('judge-canvas');
         const jCtx = judgeCanvas.getContext('2d');
 
         function openJudgePanel() {
-            // Hide main finish UI, show Judge UI
             document.getElementById('section-finish').classList.add('hidden');
             document.getElementById('mode-selector').classList.add('hidden');
             document.getElementById('section-judge').classList.remove('hidden');
 
-            tempMarks = []; // Kosongkan senarai penanda sementara untuk sesi baru
+            tempMarks = []; 
+            hoverX = -1;
+            isHovering = false;
             
-            // Setup canvas hakim
             judgeCanvas.width = currentSliceX;
             judgeCanvas.height = slitCanvas.height;
             
@@ -613,16 +607,15 @@
             if(confirm("Batal sesi ini? Tangkapan gambar tadi akan hilang.")) {
                 document.getElementById('section-judge').classList.add('hidden');
                 document.getElementById('section-finish').classList.remove('hidden');
-                document.getElementById('mode-selector').classList.add('hidden'); // Keep hidden since we are in finish mode
+                document.getElementById('mode-selector').classList.add('hidden'); 
                 
-                // Clear raw data
                 currentSliceX = 0;
                 sliceData = [];
                 tempMarks = [];
+                hoverX = -1;
             }
         }
 
-        // Convert Click X to Time accurately
         function getTimeFromX(targetX) {
             if(sliceData.length === 0) return "0.00";
             let closest = sliceData;
@@ -637,7 +630,6 @@
             return closest.time;
         }
 
-        // Convert adjusted Time back to X for drawing red line
         function getXFromTime(targetTime) {
             if(sliceData.length === 0) return 0;
             let t = parseFloat(targetTime);
@@ -653,19 +645,45 @@
             return closest.x;
         }
 
-        // Klik pada Kanvas Hakim
+        // --- HOVER EVENTS UNTUK GARISAN PANDUAN PUTIH ---
+        judgeCanvas.addEventListener('mousemove', function(e) {
+            const rect = judgeCanvas.getBoundingClientRect();
+            const scaleX = judgeCanvas.width / rect.width;
+            hoverX = (e.clientX - rect.left) * scaleX;
+            isHovering = true;
+            renderJudgeCanvas();
+        });
+
+        judgeCanvas.addEventListener('mouseleave', function() {
+            isHovering = false;
+            renderJudgeCanvas();
+        });
+
+        // Sokongan skrin sentuh (Touch)
+        judgeCanvas.addEventListener('touchmove', function(e) {
+            const rect = judgeCanvas.getBoundingClientRect();
+            const scaleX = judgeCanvas.width / rect.width;
+            hoverX = (e.touches.clientX - rect.left) * scaleX;
+            isHovering = true;
+            renderJudgeCanvas();
+        }, { passive: true });
+
+        judgeCanvas.addEventListener('touchend', function() {
+            isHovering = false;
+            renderJudgeCanvas();
+        });
+
+        // --- KLIK UNTUK MENANDA KEPUTUSAN ---
         judgeCanvas.addEventListener('click', function(e) {
             const rect = judgeCanvas.getBoundingClientRect();
-            // Kira skala x sebab canvas direndere pada height tertentu dengan width 'auto'
             const scaleX = judgeCanvas.width / rect.width;
             const clickX = (e.clientX - rect.left) * scaleX;
             
             const markedTime = getTimeFromX(clickX);
             
-            // Tambah ke senarai sementara (dengan ID unik)
             tempMarks.push({
-                id: Date.now() + Math.random(), // Unique ID
-                x: getXFromTime(markedTime), // Recalculate true X
+                id: Date.now() + Math.random(), 
+                x: getXFromTime(markedTime), 
                 time: markedTime
             });
             
@@ -673,10 +691,35 @@
             renderTempMarksTable();
         });
 
-        // Lukis Base image + Tanda Pelari
         function renderJudgeCanvas() {
+            // 1. Gambar Asal
             jCtx.drawImage(slitCanvas, 0, 0, currentSliceX, slitCanvas.height, 0, 0, currentSliceX, slitCanvas.height);
             
+            // 2. Garisan Panduan (Hover Putih) - Dilukis di Bawah
+            if (isHovering && hoverX >= 0) {
+                const hoverTime = getTimeFromX(hoverX);
+                
+                // Garisan Putih
+                jCtx.strokeStyle = "rgba(255, 255, 255, 0.9)";
+                jCtx.setLineDash(); 
+                jCtx.lineWidth = 3;
+                jCtx.beginPath();
+                jCtx.moveTo(hoverX, 0);
+                jCtx.lineTo(hoverX, judgeCanvas.height);
+                jCtx.stroke();
+                jCtx.setLineDash([]); 
+
+                // Kotak Masa Putih (Di bawah kanvas untuk elak bertindih dengan merah)
+                jCtx.fillStyle = "rgba(255, 255, 255, 0.9)";
+                jCtx.fillRect(hoverX - 45, judgeCanvas.height - 45, 90, 35);
+                
+                jCtx.fillStyle = "#000000";
+                jCtx.font = "bold 18px Arial";
+                jCtx.textAlign = "center";
+                jCtx.fillText(hoverTime + "s", hoverX, judgeCanvas.height - 20);
+            }
+
+            // 3. Tanda Rasmi (Merah) - Dilukis di Atas
             tempMarks.forEach(m => {
                 jCtx.strokeStyle = "#ef4444"; // red-500
                 jCtx.lineWidth = 4;
@@ -685,13 +728,12 @@
                 jCtx.lineTo(m.x, judgeCanvas.height);
                 jCtx.stroke();
                 
-                // Lukis Kotak Masa
                 jCtx.fillStyle = "rgba(0,0,0,0.8)";
-                jCtx.fillRect(m.x - 50, 20, 100, 45);
+                jCtx.fillRect(m.x - 50, 15, 100, 45);
                 jCtx.fillStyle = "#facc15"; // yellow-400
                 jCtx.font = "bold 26px Arial";
                 jCtx.textAlign = "center";
-                jCtx.fillText(m.time + "s", m.x, 52);
+                jCtx.fillText(m.time + "s", m.x, 47);
             });
         }
 
@@ -724,7 +766,6 @@
                 return;
             }
 
-            // Susun sementara mengikut masa untuk UI yang kemas
             const sortedMarks = [...tempMarks].sort((a,b) => parseFloat(a.time) - parseFloat(b.time));
 
             tbody.innerHTML = sortedMarks.map((m, index) => {
@@ -759,9 +800,8 @@
 
             if(confirm("Sahkan masa dan simpan semua keputusan ini ke jadual utama?")) {
                 
-                // Hasilkan gambar crop (bukti) untuk setiap pelari yang ditanda
                 tempMarks.forEach(m => {
-                    const cropWidth = 400; // Lebar imej bukti
+                    const cropWidth = 400; 
                     const startX = Math.max(0, m.x - cropWidth / 2);
                     const actualCropWidth = Math.min(cropWidth, currentSliceX - startX);
                     
@@ -770,10 +810,8 @@
                     proofCanvas.height = slitCanvas.height;
                     const pCtx = proofCanvas.getContext('2d');
                     
-                    // Salin bahagian raw gambar
                     pCtx.drawImage(slitCanvas, startX, 0, actualCropWidth, slitCanvas.height, 0, 0, actualCropWidth, slitCanvas.height);
                     
-                    // Lukis garisan merah & label masa atas gambar bukti ini
                     const lineX = m.x - startX;
                     pCtx.strokeStyle = "red";
                     pCtx.lineWidth = 4;
@@ -783,31 +821,28 @@
                     pCtx.stroke();
                     
                     pCtx.fillStyle = "rgba(0,0,0,0.8)";
-                    pCtx.fillRect(lineX - 50, 20, 100, 45);
+                    pCtx.fillRect(lineX - 50, 15, 100, 45);
                     pCtx.fillStyle = "#facc15";
                     pCtx.font = "bold 26px Arial";
                     pCtx.textAlign = "center";
-                    pCtx.fillText(m.time + "s", lineX, 52);
+                    pCtx.fillText(m.time + "s", lineX, 47);
                     
                     const imgData = proofCanvas.toDataURL('image/jpeg', 0.8);
                     
-                    // Masukkan ke jadual rasmi
                     results.push({
                         time: m.time,
                         img: imgData
                     });
                 });
 
-                // Clear memory
                 currentSliceX = 0;
                 sliceData = [];
                 tempMarks = [];
+                hoverX = -1;
 
-                // Kembali ke paparan utama
                 document.getElementById('section-judge').classList.add('hidden');
                 document.getElementById('section-finish').classList.remove('hidden');
                 
-                // Kemaskini Jadual Rasmi
                 renderTable();
             }
         }
