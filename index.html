@@ -16,7 +16,6 @@
             position: absolute; top: 0; bottom: 0; left: 50%;
             width: 2px; background-color: #ef4444; transform: translateX(-50%); z-index: 10;
         }
-        /* Custom Scrollbar untuk ruang Photo Finish */
         .slit-container {
             width: 100%; height: 250px;
             overflow-x: auto; overflow-y: hidden;
@@ -169,16 +168,16 @@
         // ==========================================
         // 1. FIREBASE SETUP
         // ==========================================
-        const firebaseConfig = {
-            apiKey: "AIzaSyB6cOX9OoM6-Z2r7svyGUaMC7SzwJzpF5Q",
-            authDomain: "sprint-timer-v2.firebaseapp.com",
-            databaseURL: "https://sprint-timer-v2-default-rtdb.asia-southeast1.firebasedatabase.app",
-            projectId: "sprint-timer-v2",
-            storageBucket: "sprint-timer-v2.firebasestorage.app",
-            messagingSenderId: "490693241804",
-            appId: "1:490693241804:web:264ae3d32f2df78a9f8b69",
-            measurementId: "G-PMT4YC1GNW"
-        };
+   const firebaseConfig = {
+  apiKey: "AIzaSyB6cOX9OoM6-Z2r7svyGUaMC7SzwJzpF5Q",
+  authDomain: "sprint-timer-v2.firebaseapp.com",
+  databaseURL: "https://sprint-timer-v2-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "sprint-timer-v2",
+  storageBucket: "sprint-timer-v2.firebasestorage.app",
+  messagingSenderId: "490693241804",
+  appId: "1:490693241804:web:264ae3d32f2df78a9f8b69",
+  measurementId: "G-PMT4YC1GNW"
+};
         if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
         const db = firebase.database();
 
@@ -190,28 +189,24 @@
         let isRaceStopped = true; 
         let serverOffset = 0; 
         
-        // Mic
         let isMicActive = false;
         let audioContext, analyser, dataArray;
         let currentThreshold = 70; 
         let isArmed = false;
 
-        // Slit Scan & Canvas Asas
         let isRecording = false;
         let reqRecord;
         
         const slitCanvas = document.getElementById('slit-canvas');
         const slitCtx = slitCanvas.getContext('2d', { willReadFrequently: true });
         
-        // Imej asal kita simpan di "Offscreen Canvas" supaya bila kita klik lukis line merah,
-        // kita boleh padam balik jika perlu tanpa merosakkan gambar asal.
         let baseCanvas = document.createElement('canvas');
         let baseCtx = baseCanvas.getContext('2d', { willReadFrequently: true });
         
         let currentDrawX = 0;
-        let sliceWidth = 4; // 4 Piksel optimum
-        let mapMasa = []; // Simpan rekod X -> Masa
-        let senaraiPenanda = []; // Simpan klik hakim
+        let sliceWidth = 4; 
+        let mapMasa = []; 
+        let senaraiPenanda = []; 
 
         // Sinkronisasi Masa Firebase
         db.ref('.info/serverTimeOffset').on('value', snap => {
@@ -262,14 +257,14 @@
                 container.classList.replace('max-w-md', 'max-w-6xl');
                 stopwatch.classList.replace('text-6xl', 'text-8xl');
                 fsText.innerText = "Keluar Penuh";
-                if(wrapper) wrapper.style.height = "500px";
+                if(wrapper) wrapper.style.height = "450px";
             } else {
                 container.classList.replace('max-w-6xl', 'max-w-md');
                 stopwatch.classList.replace('text-8xl', 'text-6xl');
                 fsText.innerText = "Skrin Penuh";
                 if(wrapper) wrapper.style.height = "250px";
             }
-            redrawCanvas(); // Resize trigger
+            redrawCanvas(); 
         });
 
         // ==========================================
@@ -322,8 +317,12 @@
 
             if(isArmed && volume > currentThreshold) { 
                 isArmed = false;
-                // Tembak Firebase bila bunyi lepasi limit
-                db.ref(`tournaments/${currentRoom}/start`).set({ timestamp: firebase.database.ServerValue.TIMESTAMP });
+                
+                // Menghantar data ke Firebase dengan path mengikut bilik/room
+                db.ref(`race/${currentRoom}/start`).set({ 
+                    timestamp: firebase.database.ServerValue.TIMESTAMP 
+                }).catch(err => alert("Gagal hantar data: " + err.message));
+                
                 const armBtn = document.getElementById('arm-btn');
                 armBtn.innerText = "BAM! (MASA BERJALAN)";
                 armBtn.className = "w-full bg-slate-800 text-emerald-400 border border-emerald-500 font-black py-8 rounded-xl text-2xl tracking-widest mb-4";
@@ -332,8 +331,8 @@
         }
 
         function resetSystem() {
-            if(confirm(`Reset sistem? Semua masa akan dikosongkan.`)) {
-                db.ref(`tournaments/${currentRoom}/start`).remove(); 
+            if(confirm(`Padam rekod larian semasa untuk bilik ini?`)) {
+                db.ref(`race/${currentRoom}/start`).remove().catch(err => alert("Gagal reset: " + err.message)); 
                 isArmed = false;
                 if(isMicActive) {
                     const armBtn = document.getElementById('arm-btn');
@@ -348,7 +347,6 @@
         // ==========================================
         async function initCamera() {
             try {
-                // Resolution biasa cukup, tak membebankan HP
                 const stream = await navigator.mediaDevices.getUserMedia({ 
                     video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } } 
                 });
@@ -357,30 +355,30 @@
         }
 
         function listenToFirebaseStart() {
-            db.ref(`tournaments/${currentRoom}/start`).on('value', snap => {
+            // Dengar data dari Firebase mengikut bilik
+            db.ref(`race/${currentRoom}/start`).on('value', snap => {
                 const data = snap.val();
                 if(data && data.timestamp) {
-                    // Start
                     startTime = data.timestamp;
                     isRaceStopped = false;
                     requestAnimationFrame(updateStopwatchUI);
                 } else {
-                    // Reset
                     startTime = null;
                     isRaceStopped = true;
                     
                     const msSize = isFullScreen ? 'text-6xl' : 'text-3xl';
                     document.getElementById('stopwatch').innerHTML = `00:00<span class="${msSize} text-blue-400">.00</span>`;
                     
-                    if (isRecording) toggleRecording(); 
+                    if (isRecording) stopRace(); // Auto hentikan jika tgh rakam
                     
-                    // Bersihkan rekod
                     currentDrawX = 0;
                     mapMasa = [];
                     senaraiPenanda = [];
                     renderTable();
                     document.getElementById('finish-area').classList.add('hidden');
                 }
+            }, err => {
+                alert("Gagal bersambung ke Firebase: Pangkalan data mungkin disekat atau salah rule.");
             });
         }
 
@@ -401,32 +399,29 @@
         }
 
         // ==========================================
-        // 6. ENJIN SLIT-SCAN (SANGAT RINGKAS)
+        // 6. ENJIN SLIT-SCAN BERTERUSAN
         // ==========================================
         function toggleRecording() {
-            if(!startTime) return alert("Sila tunggu tembakan pelepas!");
+            if(!startTime) return alert("Sila tunggu tembakan pelepas! Masa masih belum berjalan.");
             
             const btn = document.getElementById('btn-record');
             
             if(!isRecording) {
-                // START RECORD
                 isRecording = true;
                 const video = document.getElementById('webcam');
                 
-                // Set saiz kanvas asas
                 baseCanvas.height = slitCanvas.height = video.videoHeight || 480;
-                baseCanvas.width = slitCanvas.width = 3000; // Ruang awal
+                baseCanvas.width = slitCanvas.width = 3000; 
                 
                 currentDrawX = 0;
                 mapMasa = [];
                 senaraiPenanda = [];
-                renderTable(); // Kosongkan jadual
+                renderTable(); 
                 
                 document.getElementById('finish-area').classList.remove('hidden');
                 
                 btn.innerHTML = `MEREKOD GAMBAR...`;
-                btn.className = "w-full bg-slate-800 text-red-500 font-bold py-3 rounded-lg border border-slate-700 shadow-inner mb-4 cursor-not-allowed";
-                btn.disabled = true;
+                btn.className = "w-full bg-slate-800 text-red-500 font-bold py-3 rounded-lg border border-slate-700 shadow-inner active:scale-95 transition cursor-pointer";
                 
                 captureSlitLoop();
             }
@@ -438,7 +433,10 @@
             const video = document.getElementById('webcam');
             if (video.videoWidth === 0) return requestAnimationFrame(captureSlitLoop);
             
-            // Auto panjangkan kanvas jika penuh
+            if(rawCanvas && rawCanvas.height !== video.videoHeight) {
+                baseCanvas.height = slitCanvas.height = video.videoHeight;
+            }
+            
             if (currentDrawX + sliceWidth >= baseCanvas.width) {
                 let temp = document.createElement('canvas');
                 temp.width = baseCanvas.width; temp.height = baseCanvas.height;
@@ -453,17 +451,14 @@
             
             const centerX = Math.floor(video.videoWidth / 2);
             
-            // 1. Lukis ke Base Canvas (Original Tanpa Line Merah)
-            baseCtx.drawImage(video, centerX, 0, sliceWidth, video.videoHeight, currentDrawX, 0, sliceWidth, baseCanvas.height);
+            baseCtx.drawImage(video, centerX - (sliceWidth/2), 0, sliceWidth, video.videoHeight, currentDrawX, 0, sliceWidth, baseCanvas.height);
             
-            // Simpan Data Masa
             mapMasa.push({ x: currentDrawX, time: diff.toFixed(2) });
             currentDrawX += sliceWidth;
             
-            // 2. Paparkan pada skrin (Live view)
             redrawCanvas();
 
-            // Auto-scroll wrapper ke kanan secara live
+            // Auto-scroll live view
             const wrapper = document.getElementById('canvas-wrapper');
             wrapper.scrollLeft = wrapper.scrollWidth;
             
@@ -477,11 +472,8 @@
             if (isRecording) {
                 isRecording = false;
                 const btn = document.getElementById('btn-record');
-                btn.disabled = false;
-                btn.innerHTML = `🔴 MULA RAKAM (Bila pelari hampir tiba)`;
-                btn.className = "w-full bg-red-600 hover:bg-red-500 font-bold py-3 rounded-lg shadow-lg active:scale-95 transition text-white";
-                
-                if(currentDrawX < 20) alert("Rakaman terlalu pendek.");
+                btn.innerHTML = `🔴 MULA RAKAM (Sambung Rakam)`;
+                btn.className = "bg-red-600 hover:bg-red-500 font-bold py-3 rounded-lg shadow-lg active:scale-95 transition text-white w-full";
             }
         }
 
@@ -489,20 +481,14 @@
         // 7. KLIK PADA GAMBAR UNTUK TANDA MASA (ZERO BUG)
         // ==========================================
         slitCanvas.addEventListener('click', function(e) {
-            if(isRecording) return alert("Sila hentikan rakaman sebelum menanda masa.");
+            if(isRecording) return alert("Sila HENTIKAN JAM/RAKAMAN terlebih dahulu sebelum menanda masa.");
             if(currentDrawX === 0) return;
 
-            // X = offsetX. Inilah RAHSIA kenapa ia sentiasa tepat.
-            // offsetX adalah koordinat X titik sentuhan *berbanding dengan kanvas itu sendiri*, 
-            // tidak kira panjang mana kita skrol atau saiz CSS kanvas.
-            
-            // Dapatkan ratio lebar sebenar / lebar dipaparkan jika browser ejas sedikit width kanvas
             const rect = slitCanvas.getBoundingClientRect();
             const scaleX = slitCanvas.width / rect.width;
             
             const rawClickX = e.offsetX * scaleX; 
 
-            // Cari masa pada rawClickX
             const foundTime = cariMasaTerdekat(rawClickX);
             
             if(foundTime !== "0.00") {
@@ -531,27 +517,23 @@
         }
 
         function redrawCanvas() {
-            // Trim paparan untuk ngam dengan rekod gambar
             slitCanvas.width = currentDrawX;
             slitCanvas.height = baseCanvas.height;
             
-            // 1. Refresh lukisan asal dari baseCanvas
             slitCtx.clearRect(0, 0, slitCanvas.width, slitCanvas.height);
             slitCtx.drawImage(baseCanvas, 0, 0, currentDrawX, baseCanvas.height, 0, 0, currentDrawX, slitCanvas.height);
             
-            // 2. Lukis garisan merah di atasnya
             senaraiPenanda.forEach(m => {
-                slitCtx.strokeStyle = "#ef4444"; // red-500
+                slitCtx.strokeStyle = "#ef4444"; 
                 slitCtx.lineWidth = 4;
                 slitCtx.beginPath();
                 slitCtx.moveTo(m.x, 0);
                 slitCtx.lineTo(m.x, slitCanvas.height);
                 slitCtx.stroke();
                 
-                // Kotak Teks Masa Hitam
                 slitCtx.fillStyle = "rgba(0,0,0,0.8)";
                 slitCtx.fillRect(m.x - 40, 10, 80, 35);
-                slitCtx.fillStyle = "#facc15"; // yellow-400
+                slitCtx.fillStyle = "#facc15"; 
                 slitCtx.font = "bold 18px Arial";
                 slitCtx.textAlign = "center";
                 slitCtx.fillText(m.time + "s", m.x, 34);
@@ -563,7 +545,7 @@
         // ==========================================
         function buangPenanda(index) {
             senaraiPenanda.splice(index, 1);
-            redrawCanvas(); // Garisan merah akan hilang!
+            redrawCanvas(); 
             renderTable();
         }
 
@@ -576,13 +558,12 @@
                 return;
             }
 
-            // Susun iku masa (Paling pantas atas)
             const sorted = [...senaraiPenanda].map((m, i) => ({...m, originalIndex: i})).sort((a,b) => parseFloat(a.time) - parseFloat(b.time));
 
             tbody.innerHTML = sorted.map((m, i) => {
                 return `
                 <tr class="border-b border-slate-800 bg-slate-900 hover:bg-slate-800 transition">
-                    <td class="p-3 font-bold text-blue-400">#${i + 1}</td>
+                    <td class="p-3 font-bold text-blue-400">Kedudukan #${i + 1}</td>
                     <td class="p-2 font-mono font-black text-xl text-white">${m.time}s</td>
                     <td class="p-2 text-center">
                         <button onclick="buangPenanda(${m.originalIndex})" class="bg-red-500/20 text-red-500 hover:bg-red-500 hover:text-white px-3 py-1 rounded text-xs font-bold transition">BUANG</button>
@@ -593,7 +574,7 @@
         }
 
         async function exportPDF() {
-            if(senaraiPenanda.length === 0) return alert("Tiada keputusan direkodkan.");
+            if(senaraiPenanda.length === 0) return alert("Tiada keputusan untuk dieksport.");
             
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF();
@@ -629,7 +610,7 @@
                 doc.setTextColor(220, 38, 38); 
                 doc.text(`${m.time} s`, 15, yPos + 15);
                 
-                // Hasilkan Gambar Keratan Bukti
+                // Crop gambar bukti
                 const cropWidth = 200;
                 const startX = Math.max(0, m.x - cropWidth / 2);
                 const drawWidth = Math.min(cropWidth, currentDrawX - startX);
@@ -641,7 +622,6 @@
                 
                 pCtx.drawImage(baseCanvas, startX, 0, drawWidth, baseCanvas.height, 0, 0, drawWidth, proofCanvas.height);
                 
-                // Lukis garisan merah pada bukti
                 const lineX = m.x - startX;
                 pCtx.strokeStyle = "red";
                 pCtx.lineWidth = 4;
@@ -664,7 +644,7 @@
                 }
             });
             
-            doc.save(`Keputusan_${currentRoom}.pdf`);
+            doc.save(`Keputusan_Larian_${currentRoom}.pdf`);
         }
 
     </script>
