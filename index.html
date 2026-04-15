@@ -32,7 +32,6 @@
         #main-container {
             transition: max-width 0.4s ease-in-out;
         }
-        /* Custom scroll behavior untuk kelancaran hakim */
         #judge-scroll-area {
             scroll-behavior: auto; 
             -webkit-overflow-scrolling: touch;
@@ -209,7 +208,7 @@
 
                 <div class="relative w-full h-[350px] md:h-[500px] border-2 border-slate-600 rounded-xl bg-slate-800 overflow-hidden mb-4 shadow-inner">
                     
-                    <div id="judge-scroll-area" class="w-full h-full overflow-x-auto overflow-y-hidden no-scrollbar relative" onscroll="updateJudgeTime()">
+                    <div id="judge-scroll-area" class="w-full h-full overflow-x-auto overflow-y-hidden no-scrollbar relative">
                         <div id="judge-padding-wrapper" class="flex h-full" style="width: max-content;">
                             <canvas id="judge-canvas" class="h-full block max-w-none bg-slate-900"></canvas>
                         </div>
@@ -283,19 +282,20 @@
         let audioContext, analyser, dataArray;
         let currentThreshold = 70; 
 
-        // Manual Slit-Scan Variables
+        // Manual Slit-Scan
         let isRecording = false;
         let slitCanvas = document.createElement('canvas'); 
         let slitCtx = slitCanvas.getContext('2d', { willReadFrequently: true });
         let currentSliceX = 0;
-        let sliceWidth = 6; // Tebalkan sikit slice supaya gambar lebih padat dan kurang herot
+        let sliceWidth = 6; 
         let sliceData = []; 
         
         // Judging Variables
         let tempMarks = []; 
         let currentJudgeX = 0;
         let currentJudgeTime = "0.00";
-        const stretchRatio = 4; // Skala regangan untuk paparan hakim
+        const stretchRatio = 4; 
+        let isJudging = false; // Flag loop
 
         // --- 3. OFFSET MASA PELAYAN ---
         db.ref('.info/serverTimeOffset').on('value', function(snapshot) {
@@ -321,7 +321,6 @@
             const stopwatch = document.getElementById('stopwatch');
             const tableContainer = document.getElementById('table-container');
             const judgeCanvas = document.getElementById('judge-canvas');
-            const scrollAreaDiv = document.getElementById('judge-scroll-area');
             
             if (document.fullscreenElement) {
                 isFullScreen = true;
@@ -341,10 +340,7 @@
                 judgeCanvas.parentElement.parentElement.classList.replace('h-[500px]', 'h-[350px]'); 
             }
             
-            // Susun semula saiz padding skrol
-            if (!document.getElementById('section-judge').classList.contains('hidden')) {
-                setTimeout(updateJudgePadding, 100);
-            }
+            if (isJudging) setTimeout(updateJudgePadding, 100);
         });
 
         // --- 4. KAWALAN UI & ROOM LOGIC ---
@@ -532,7 +528,7 @@
                 slitCanvas.width = 4000; 
                 slitCanvas.height = video.videoHeight || 480;
                 currentSliceX = 0;
-                sliceData = [];
+                sliceData = []; // Clear array untuk rekod baru
                 
                 btn.innerHTML = `Merekod... (Tunggu pelari habis, tekan Henti di bawah)`;
                 btn.className = "w-full bg-slate-700 text-slate-400 font-bold py-4 rounded-xl text-lg shadow-inner mb-4 border border-slate-600 cursor-not-allowed";
@@ -563,15 +559,16 @@
             
             const currentServerTime = Date.now() + serverOffset;
             let diff = (currentServerTime - startTime) / 1000;
-            if(diff < 0) diff = 0;
+            if(diff < 0 || isNaN(diff)) diff = 0;
             
             const centerX = Math.floor(video.videoWidth / 2);
             
             slitCtx.drawImage(video, centerX - 2, 0, sliceWidth, video.videoHeight, currentSliceX, 0, sliceWidth, slitCanvas.height);
             
-            sliceData.push({ x: currentSliceX, time: diff.toFixed(2) });
-            currentSliceX += sliceWidth;
+            let safeTime = diff.toFixed(2);
+            sliceData.push({ x: currentSliceX, time: safeTime });
             
+            currentSliceX += sliceWidth;
             requestAnimationFrame(recordSlitFrame);
         }
 
@@ -598,7 +595,7 @@
         }
 
         // ==========================================
-        // SECTION: JUDGING PANEL LOGIC (SCROLL TO ALIGN)
+        // SECTION: JUDGING PANEL LOGIC (BUG-FREE SCROLL)
         // ==========================================
         const judgeCanvas = document.getElementById('judge-canvas');
         const jCtx = judgeCanvas.getContext('2d', { willReadFrequently: true });
@@ -622,19 +619,21 @@
             currentJudgeX = 0;
             currentJudgeTime = "0.00";
             
-            // Saizkan canvas mengikut regangan supaya nampak tebal (macam SprintTimer)
             judgeCanvas.width = currentSliceX * stretchRatio;
             judgeCanvas.height = slitCanvas.height;
             
+            isJudging = true;
             updateJudgePadding();
             renderJudgeCanvas();
             renderTempMarksTable();
             
-            // Auto scroll ke hujung perlumbaan apabila panel dibuka
+            // Mulakan loop berterusan untuk check koordinat dengan tepat
+            requestAnimationFrame(judgeLoop);
+
+            // Auto scroll ke hujung larian bila buka
             setTimeout(() => {
-                const scrollDiv = document.getElementById('judge-scroll-area');
-                scrollDiv.scrollLeft = scrollDiv.scrollWidth;
-                updateJudgeTime(); 
+                const scrollArea = document.getElementById('judge-scroll-area');
+                scrollArea.scrollLeft = scrollArea.scrollWidth;
             }, 100);
         }
 
@@ -645,6 +644,7 @@
         }
 
         function closeJudgePanel() {
+            isJudging = false; // Stop loop
             document.getElementById('section-judge').classList.add('hidden');
             document.getElementById('finish-camera-view').classList.remove('hidden');
             document.getElementById('results-panel-main').classList.remove('hidden');
@@ -654,7 +654,7 @@
             tempMarks = [];
         }
 
-        // Cari masa paling tepat berdasar rekod RAW Piksel
+        // Cari masa paling tepat berdasar RAW Piksel
         function getTimeFromX(targetRawX) {
             if(!sliceData || sliceData.length === 0) return "0.00";
             let closest = sliceData;
@@ -690,29 +690,46 @@
             return closest.x || 0;
         }
 
-        // Kemaskini data semasa pengguna sedang scroll
-        function updateJudgeTime() {
+        // --- ENJIN SKROL FIZIKAL (100% TEPAT) ---
+        function judgeLoop() {
+            if(!isJudging) return;
+
             const scrollArea = document.getElementById('judge-scroll-area');
-            if(!scrollArea) return;
-            
-            // Kerana ada padding = 50% screen width, nilai scrollLeft adalah tepat 
-            // menunjukkan titik piksel (dari kiri imej) yang berada di tengah-tengah skrin.
-            const scrollCenterPixel = scrollArea.scrollLeft; 
-            
-            // Tukar dari koordinat Skrol yang dah diregang ke koordinat RAW imej
-            let targetRawX = scrollCenterPixel / stretchRatio;
+            const canvas = document.getElementById('judge-canvas');
 
-            if(targetRawX < 0) targetRawX = 0;
-            if(targetRawX > currentSliceX) targetRawX = currentSliceX;
+            if(scrollArea && canvas && sliceData.length > 0) {
+                // Dapatkan koordinat fizikal kotak skrol dan kanvas di atas skrin
+                const areaRect = scrollArea.getBoundingClientRect();
+                const canvasRect = canvas.getBoundingClientRect();
 
-            currentJudgeX = targetRawX;
-            currentJudgeTime = getTimeFromX(targetRawX);
+                // Cari titik tengah (garisan merah) pada skrin
+                const crosshairScreenX = areaRect.left + (areaRect.width / 2);
 
-            document.getElementById('judge-current-time').innerText = currentJudgeTime + "s";
+                // Cari perbezaan jarak garisan merah berbanding sisi mula kanvas
+                // Ini akan memberikan ukuran piksel CSS yang tepat!
+                const pixelCSSInsideCanvas = crosshairScreenX - canvasRect.left;
+
+                // Tukar kepada koordinat gambar RAW asal (padam regangan)
+                let targetRawX = pixelCSSInsideCanvas / stretchRatio;
+
+                // Pastikan tak terkeluar batas
+                if(targetRawX < 0) targetRawX = 0;
+                if(targetRawX > currentSliceX) targetRawX = currentSliceX;
+
+                currentJudgeX = targetRawX;
+                currentJudgeTime = getTimeFromX(targetRawX);
+
+                document.getElementById('judge-current-time').innerText = currentJudgeTime + "s";
+            }
+
+            requestAnimationFrame(judgeLoop);
         }
 
         function markRunnerAtCrosshair() {
-            if(currentJudgeX < 0 || sliceData.length === 0) return;
+            if(currentJudgeX < 0 || sliceData.length === 0) {
+                alert("Sila skrol gambar ke kawasan larian terlebih dahulu.");
+                return;
+            }
             const uniqueId = 'mark_' + Date.now();
             
             tempMarks.push({
@@ -726,13 +743,13 @@
         }
 
         function renderJudgeCanvas() {
-            // Bersihkan kanvas dan lukis semula imej yang telah diregangkan
+            // Lukis gambar diregangkan
             jCtx.clearRect(0, 0, judgeCanvas.width, judgeCanvas.height);
             jCtx.drawImage(slitCanvas, 0, 0, currentSliceX, slitCanvas.height, 0, 0, judgeCanvas.width, judgeCanvas.height);
             
-            // Lukis tanda pelari seperti style SprintTimer (Garisan putih, teks kecil di atas)
+            // Lukis tanda rasmi (seperti SprintTimer sebenar)
             tempMarks.forEach((m) => {
-                const drawX = m.x * stretchRatio; // Titik lukisan mesti ikut regangan skrin
+                const drawX = m.x * stretchRatio; 
                 
                 jCtx.strokeStyle = "white"; 
                 jCtx.lineWidth = 2;
@@ -741,7 +758,7 @@
                 jCtx.lineTo(drawX, judgeCanvas.height);
                 jCtx.stroke();
                 
-                // Label masa di bahagian atas garisan putih
+                // Label masa
                 jCtx.fillStyle = "rgba(0,0,0,0.6)";
                 jCtx.fillRect(drawX - 30, 0, 60, 25);
                 jCtx.fillStyle = "white"; 
@@ -762,7 +779,7 @@
                 if (parseFloat(newTime) < 0) newTime = "0.00";
                 
                 mark.time = newTime;
-                mark.x = getXFromTime(newTime); // Cari semula x yang tepat di background
+                mark.x = getXFromTime(newTime); 
                 
                 renderJudgeCanvas();
                 renderTempMarksTable();
@@ -822,9 +839,8 @@
                 tempMarks.forEach(m => {
                     const safeTime = (m.time && m.time !== "NaN") ? m.time : "0.00";
                     
-                    // Kita potong gambar dari lukisan canvas yang diregang supaya bentuk pelari kekal normal
                     const cropWidth = isFullScreen ? 600 : 300; 
-                    const drawX = m.x * stretchRatio; // Koordinat X atas imej yang ditarik
+                    const drawX = m.x * stretchRatio; 
                     
                     const startX = Math.max(0, drawX - cropWidth / 2);
                     const actualCropWidth = Math.min(cropWidth, judgeCanvas.width - startX);
@@ -834,7 +850,7 @@
                     proofCanvas.height = judgeCanvas.height;
                     const pCtx = proofCanvas.getContext('2d');
                     
-                    // Ambil keratan dari judgeCanvas (yang dah diregang & ada tanda rasmi siap-siap)
+                    // Salin dari kanvas regangan hakim
                     pCtx.drawImage(judgeCanvas, 
                         startX, 0, actualCropWidth, judgeCanvas.height, 
                         0, 0, proofCanvas.width, proofCanvas.height);
@@ -878,7 +894,6 @@
                 return;
             }
 
-            // Mencegah ralat undefined di pemenang jika jadual dimanipulasi salah
             const sortedResults = [...results].map((r, i) => ({...r, originalIndex: i})).sort((a, b) => parseFloat(a.time || 0) - parseFloat(b.time || 0));
             
             let html = '<div class="grid grid-cols-3 gap-2 md:gap-4 w-full">';
