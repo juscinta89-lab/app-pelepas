@@ -6,10 +6,8 @@
     <title>Sprint Timer Pro - Slit Scan Photo Finish</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
-    
     <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-database-compat.js"></script>
-    
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     
     <style>
@@ -25,10 +23,11 @@
             box-shadow: 0 0 5px rgba(239, 68, 68, 0.8);
         }
         .slit-canvas-view {
-            height: 250px;
+            height: 350px;
             width: auto;
             max-width: none;
             touch-action: pan-x pan-y;
+            cursor: crosshair;
         }
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
@@ -46,7 +45,7 @@
 
     <div id="main-container" class="max-w-md mx-auto p-4">
         
-        <div class="text-center mb-8 mt-6 relative">
+        <div class="text-center mb-6 mt-4 relative">
             <button onclick="location.reload()" id="btn-change-room" class="hidden absolute top-0 left-0 bg-slate-800 text-slate-300 border border-slate-600 text-[10px] px-2 py-1 rounded hover:bg-slate-700 transition shadow-sm z-20">
                 ⬅ Tukar Bilik
             </button>
@@ -54,7 +53,7 @@
             <h1 class="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-orange-500 tracking-wider flex items-center justify-center gap-2">
                 ⚡ SPRINT TIMER
             </h1>
-            <p class="text-slate-400 text-sm tracking-widest uppercase mt-1">Slit-Scan Photo Finish (60FPS)</p>
+            <p class="text-slate-400 text-sm tracking-widest uppercase mt-1">Sistem Photo Finish Profesional</p>
             
             <div id="room-badge" class="hidden mt-3">
                 <span class="bg-blue-900/50 text-blue-300 border border-blue-500/50 px-3 py-1 rounded-full text-xs font-bold tracking-widest">
@@ -77,7 +76,7 @@
             </div>
         </div>
 
-        <div id="mode-selector" class="hidden flex gap-4 mb-8 transition-opacity duration-300">
+        <div id="mode-selector" class="hidden flex gap-4 mb-6 transition-opacity duration-300">
             <button onclick="setMode('starter')" class="flex-1 bg-gradient-to-b from-blue-500 to-blue-700 p-5 rounded-2xl font-bold hover:from-blue-400 hover:to-blue-600 shadow-lg shadow-blue-900/50 transition-all active:scale-95 border border-blue-400/30 flex flex-col items-center gap-2">
                 <span class="text-2xl">🔫</span>
                 MOD PELEPAS
@@ -145,7 +144,6 @@
                 
                 <div class="relative mb-5 mt-2 overflow-hidden rounded-2xl border border-slate-600 bg-black shadow-inner">
                     <video id="webcam" autoplay playsinline class="w-full object-cover aspect-video"></video>
-                    
                     <div class="finish-line-overlay"></div>
                 </div>
 
@@ -155,22 +153,15 @@
                     </button>
                 </div>
                 
-                <div id="preview-container" class="hidden bg-slate-800/80 p-3 rounded-xl mb-4 border border-slate-600 shadow-inner">
-                    <p class="text-xs text-yellow-400 mb-2 font-bold animate-pulse text-center tracking-wide">👆 LERET & KLIK PADA DADA PELARI DALAM GAMBAR INI UNTUK TANDA MASA</p>
-                    <div class="overflow-x-auto no-scrollbar border border-slate-700 rounded bg-black">
-                        <canvas id="slit-preview-canvas" class="slit-canvas-view cursor-crosshair"></canvas>
-                    </div>
-                </div>
-
-                <button id="stop-btn" onclick="stopRace()" class="w-full bg-slate-700 hover:bg-slate-600 text-red-400 font-bold p-4 rounded-xl shadow-lg border border-slate-600 transition-colors flex items-center justify-center gap-2">
-                    🛑 HENTIKAN JAM & RESET
+                <button id="stop-btn" onclick="stopAndProcess()" class="w-full bg-slate-700 hover:bg-slate-600 text-yellow-400 font-bold p-4 rounded-xl shadow-lg border border-slate-600 transition-colors flex items-center justify-center gap-2 uppercase tracking-wide">
+                    ⏹ HENTIKAN JAM & PROSES GAMBAR
                 </button>
             </div>
 
             <div class="glass-panel rounded-3xl p-5 shadow-2xl">
                 <div class="flex justify-between items-center mb-4">
                     <h3 class="font-bold text-lg text-emerald-400 uppercase tracking-widest flex items-center gap-2">
-                        Keputusan
+                        Keputusan Rasmi
                     </h3>
                     <span id="result-count" class="text-sm bg-emerald-500/20 text-emerald-300 px-3 py-1 rounded-full font-bold border border-emerald-500/30">0</span>
                 </div>
@@ -181,7 +172,7 @@
                             <tr class="text-slate-400 text-xs uppercase tracking-wider">
                                 <th class="py-3 px-3">#</th>
                                 <th class="px-2">Masa(s)</th>
-                                <th class="px-2 text-center">Photo Finish</th>
+                                <th class="px-2 text-center">Bukti Photo Finish</th>
                                 <th class="px-2 text-center">Buang</th>
                             </tr>
                         </thead>
@@ -201,7 +192,47 @@
                 </button>
             </div>
         </div>
-    </div>
+
+        <div id="section-judge" class="hidden transition-opacity duration-300">
+            <div class="glass-panel p-4 md:p-6 rounded-3xl shadow-2xl relative mb-5">
+                <div class="flex justify-between items-center mb-4 border-b border-slate-600 pb-3">
+                    <h2 class="text-xl md:text-2xl font-black text-yellow-400 uppercase tracking-widest flex items-center gap-2">
+                        ⚖️ Panel Hakim
+                    </h2>
+                    <button onclick="cancelJudging()" class="bg-slate-700 hover:bg-slate-600 text-white text-xs px-3 py-2 rounded-lg font-bold border border-slate-500 shadow-sm transition-colors">
+                        Batal & Kembali
+                    </button>
+                </div>
+
+                <p class="text-sm text-slate-300 mb-4 bg-blue-900/30 p-3 rounded-lg border border-blue-500/30">
+                    <span class="font-bold text-blue-400">ARAHAN:</span> Leret gambar di bawah ke kiri/kanan. Klik tepat pada <b>dada pelari</b> untuk menanda masa mereka. Gunakan butang +/- di bawah untuk memperhalusi (*fine-tune*) masa.
+                </p>
+
+                <div class="overflow-x-auto no-scrollbar border-2 border-slate-600 rounded-xl bg-black mb-6 shadow-inner relative">
+                    <canvas id="judge-canvas" class="slit-canvas-view"></canvas>
+                </div>
+
+                <h3 class="font-bold text-emerald-400 uppercase tracking-widest text-sm mb-3">Tandaan Pelari (Belum Disimpan)</h3>
+                <div class="overflow-x-auto rounded-xl border border-slate-700 bg-slate-900/80 mb-6 max-h-60 overflow-y-auto no-scrollbar">
+                    <table class="w-full text-left text-sm whitespace-nowrap">
+                        <thead class="sticky top-0 bg-slate-800 z-10 shadow-sm border-b border-slate-700">
+                            <tr class="text-slate-400 text-xs uppercase tracking-wider">
+                                <th class="py-3 px-3">Pelari</th>
+                                <th class="px-2 text-center">Pelarasan Halus (Masa)</th>
+                                <th class="px-2 text-center">Buang</th>
+                            </tr>
+                        </thead>
+                        <tbody id="temp-marks-table">
+                            </tbody>
+                    </table>
+                </div>
+
+                <button onclick="saveAndExitJudge()" class="w-full bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white font-black py-4 rounded-xl text-lg shadow-lg active:scale-95 transition-all border border-emerald-400/50 tracking-widest">
+                    ✅ SAHKAN & SIMPAN KEPUTUSAN
+                </button>
+            </div>
+        </div>
+        </div>
 
     <script>
         // --- 1. KONFIGURASI FIREBASE ---
@@ -226,11 +257,10 @@
         let currentMode = '';
         let startTime = null;
         let isArmed = false;
-        let results = [];
+        let results = []; // Simpanan Akhir
         let stopwatchReqId;
         let isRaceStopped = true; 
         let serverOffset = 0; 
-        let firebaseListener = null;
         let isFullScreen = false;
 
         // Mic
@@ -240,12 +270,14 @@
 
         // Slit-Scan Variables
         let isRecordingSlit = false;
-        let slitCanvas = document.createElement('canvas'); // Master raw image
+        let slitCanvas = document.createElement('canvas'); // Imej raw asal
         let slitCtx = slitCanvas.getContext('2d');
         let currentSliceX = 0;
-        let sliceWidth = 3; // Ketebalan 3 piksel per frame (sesuai untuk 60fps)
-        let sliceData = []; // Simpan mapping koodinat X kepada Masa
-        let marks = []; // Simpan tanda (clicks) yang dibuat oleh hakim
+        let sliceWidth = 3; 
+        let sliceData = []; 
+        
+        // Judging Panel Variables
+        let tempMarks = []; // Simpan marker sebelum ditekan 'Save'
 
         // --- 3. OFFSET MASA PELAYAN ---
         db.ref('.info/serverTimeOffset').on('value', function(snapshot) {
@@ -270,7 +302,7 @@
             const fsBtnText = document.getElementById('fs-btn-text');
             const stopwatch = document.getElementById('stopwatch');
             const tableContainer = document.getElementById('table-container');
-            const slitCanvasView = document.getElementById('slit-preview-canvas');
+            const judgeCanvas = document.getElementById('judge-canvas');
             
             if (document.fullscreenElement) {
                 isFullScreen = true;
@@ -279,7 +311,7 @@
                 fsBtnText.innerText = "Keluar Paparan Penuh";
                 stopwatch.classList.replace('text-7xl', 'text-9xl');
                 tableContainer.classList.replace('max-h-64', 'max-h-[500px]');
-                slitCanvasView.style.height = '400px';
+                judgeCanvas.style.height = '500px'; // Besarkan kanvas hakim
             } else {
                 isFullScreen = false;
                 container.classList.add('max-w-md');
@@ -287,7 +319,7 @@
                 fsBtnText.innerText = "Paparan Penuh Desktop";
                 stopwatch.classList.replace('text-9xl', 'text-7xl');
                 tableContainer.classList.replace('max-h-[500px]', 'max-h-64');
-                slitCanvasView.style.height = '250px';
+                judgeCanvas.style.height = '350px';
             }
         });
 
@@ -412,7 +444,7 @@
         }
 
         // ==========================================
-        // FINISH MODE (SLIT-SCAN / MANUAL MARK)
+        // FINISH MODE (LIVE RECORDING)
         // ==========================================
         async function initCamera() {
             try {
@@ -426,7 +458,7 @@
         }
 
         function listenToStart() {
-            firebaseListener = db.ref(`tournaments/${currentRoom}/start`).on('value', snapshot => {
+            db.ref(`tournaments/${currentRoom}/start`).on('value', snapshot => {
                 const data = snapshot.val();
                 if(data && data.timestamp) {
                     startTime = data.timestamp;
@@ -443,14 +475,12 @@
                     const msSize = isFullScreen ? 'text-6xl' : 'text-4xl';
                     document.getElementById('stopwatch').innerHTML = `00:00<span class="${msSize} text-yellow-400">.00</span>`;
                     
-                    if (isRecordingSlit) toggleSlitScan(); // Matikan rakaman jika sedang on
+                    if (isRecordingSlit) toggleSlitScan(); 
                     
-                    results = [];
-                    marks = [];
+                    // Jangan clear results jika reset ditekan. Biarkan data lama dalam jadual.
+                    // reset ini hanya untuk timer.
                     currentSliceX = 0;
                     sliceData = [];
-                    document.getElementById('preview-container').classList.add('hidden');
-                    renderTable();
                 }
             });
         }
@@ -475,48 +505,28 @@
             stopwatchReqId = requestAnimationFrame(updateStopwatch);
         }
 
-        function stopRace() {
-            isRaceStopped = true;
-            document.getElementById('live-indicator').classList.add('hidden');
-            cancelAnimationFrame(stopwatchReqId);
-            
-            if (isRecordingSlit) toggleSlitScan(); // Auto Stop and preview
-        }
-
-        // --- SLIT SCAN LOGIC (PENGGANTI AUTO CAPTURE) ---
         function toggleSlitScan() {
             if(!startTime) return alert("Sistem masih menunggu tembakan pelepas! Perlumbaan belum bermula.");
             
             const btn = document.getElementById('btn-slit-scan');
             
             if(!isRecordingSlit) {
-                // START RECORDING STACKS
+                // MULA RAKAM STACK (SLIT)
                 isRecordingSlit = true;
                 
                 const video = document.getElementById('webcam');
-                slitCanvas.width = 4000; // peruntukan awal
+                slitCanvas.width = 4000; // peruntukan awal panjang kanvas
                 slitCanvas.height = video.videoHeight || 480;
                 currentSliceX = 0;
                 sliceData = [];
-                marks = [];
                 
-                btn.innerHTML = `⏹ HENTIKAN RAKAMAN SLIT-SCAN`;
-                btn.className = "w-full bg-gradient-to-b from-red-500 to-red-700 hover:from-red-400 hover:to-red-600 font-bold py-4 rounded-xl text-lg shadow-lg active:scale-95 transition-all mb-4 text-white border border-red-400/30";
+                btn.innerHTML = `Merekod... (Abaikan butang ini, tekan HENTIKAN JAM di bawah)`;
+                btn.className = "w-full bg-slate-700 text-slate-400 font-bold py-4 rounded-xl text-lg shadow-inner mb-4 border border-slate-600 cursor-not-allowed";
+                btn.disabled = true;
                 
-                document.getElementById('preview-container').classList.remove('hidden');
                 document.getElementById('live-indicator').classList.remove('hidden');
                 
                 processSlitFrame();
-            } else {
-                // STOP RECORDING STACKS
-                isRecordingSlit = false;
-                
-                btn.innerHTML = `🔴 MULA RAKAM SLIT-SCAN (Bila Pelari Hampir)`;
-                btn.className = "w-full bg-gradient-to-b from-blue-500 to-blue-700 hover:from-blue-400 hover:to-blue-600 font-bold py-4 rounded-xl text-lg shadow-lg active:scale-95 transition-all mb-4 text-white border border-blue-400/30";
-                
-                document.getElementById('live-indicator').classList.add('hidden');
-                
-                renderFinalSlitScanWithMarks();
             }
         }
 
@@ -528,7 +538,7 @@
             
             if(slitCanvas.height !== video.videoHeight) slitCanvas.height = video.videoHeight;
             
-            // Auto panjangkan kanvas jika dah hampir penuh (sangat efisien)
+            // Auto expand canvas efficiently
             if (currentSliceX + sliceWidth >= slitCanvas.width) {
                 let temp = document.createElement('canvas');
                 temp.width = slitCanvas.width;
@@ -544,137 +554,280 @@
             
             const centerX = Math.floor(video.videoWidth / 2);
             
-            // Ambil 1 garisan halus dari tengah video dan lukis (stack) pada kanvas
+            // Slice the center pixel line and stack it
             slitCtx.drawImage(video, centerX, 0, sliceWidth, video.videoHeight, currentSliceX, 0, sliceWidth, slitCanvas.height);
             
-            // Simpan masa bagi koodinat X ini
+            // Map X to Time
             sliceData.push({ x: currentSliceX, time: diff.toFixed(2) });
             currentSliceX += sliceWidth;
-            
-            // Kemaskini preview secara live (setiap 6 frame supaya tak berat)
-            if (sliceData.length % 6 === 0) {
-                renderFinalSlitScanWithMarks();
-            }
             
             requestAnimationFrame(processSlitFrame);
         }
 
-        function renderFinalSlitScanWithMarks() {
-            const previewCanvas = document.getElementById('slit-preview-canvas');
-            const pCtx = previewCanvas.getContext('2d');
+        // Action when user wants to stop and judge
+        function stopAndProcess() {
+            if(isRaceStopped && currentSliceX === 0) return alert("Tiada rakaman dibuat.");
             
-            if (currentSliceX === 0) return;
+            isRaceStopped = true;
+            document.getElementById('live-indicator').classList.add('hidden');
+            cancelAnimationFrame(stopwatchReqId);
             
-            // Samakan lebar preview dengan jumlah rakaman
-            previewCanvas.width = currentSliceX;
-            previewCanvas.height = slitCanvas.height;
-            
-            pCtx.drawImage(slitCanvas, 0, 0, currentSliceX, slitCanvas.height, 0, 0, currentSliceX, slitCanvas.height);
-            
-            // Lukis semula tanda masa (garisan merah) yang telah di-klik hakim
-            marks.forEach(m => {
-                pCtx.strokeStyle = "red";
-                pCtx.lineWidth = 4;
-                pCtx.beginPath();
-                pCtx.moveTo(m.x, 0);
-                pCtx.lineTo(m.x, previewCanvas.height);
-                pCtx.stroke();
-                
-                pCtx.fillStyle = "rgba(0,0,0,0.8)";
-                pCtx.fillRect(m.x - 40, 20, 80, 40);
-                pCtx.fillStyle = "white";
-                pCtx.font = "bold 24px Arial";
-                pCtx.textAlign = "center";
-                pCtx.fillText(m.time + "s", m.x, 48);
-            });
+            if (isRecordingSlit) {
+                isRecordingSlit = false;
+                const btn = document.getElementById('btn-slit-scan');
+                btn.disabled = false;
+                btn.innerHTML = `🔴 MULA RAKAM SLIT-SCAN`;
+                btn.className = "w-full bg-gradient-to-b from-blue-500 to-blue-700 hover:from-blue-400 hover:to-blue-600 font-bold py-4 rounded-xl text-lg shadow-lg active:scale-95 transition-all mb-4 text-white border border-blue-400/30";
+            }
+
+            if(currentSliceX > 0) {
+                openJudgePanel();
+            } else {
+                alert("Tiada gambar pelari direkod. Sistem di-reset.");
+            }
         }
 
-        // --- SISTEM TANDA (KLIK/TOUCH KANVAS OLEH HAKIM) ---
-        const previewCanvas = document.getElementById('slit-preview-canvas');
-        previewCanvas.addEventListener('click', function(e) {
-            if(isRecordingSlit) return alert("Sila hentikan rakaman terlebih dahulu sebelum menanda masa.");
-            if(currentSliceX === 0) return;
+        // ==========================================
+        // SECTION: JUDGING PANEL LOGIC
+        // ==========================================
+        const judgeCanvas = document.getElementById('judge-canvas');
+        const jCtx = judgeCanvas.getContext('2d');
+
+        function openJudgePanel() {
+            // Hide main finish UI, show Judge UI
+            document.getElementById('section-finish').classList.add('hidden');
+            document.getElementById('mode-selector').classList.add('hidden');
+            document.getElementById('section-judge').classList.remove('hidden');
+
+            tempMarks = []; // Kosongkan senarai penanda sementara untuk sesi baru
             
-            // Kira tepat koordinat X yang ditekan berdasarkan skala CSS skrin
-            const rect = previewCanvas.getBoundingClientRect();
-            const scaleX = previewCanvas.width / rect.width;
-            const clickX = (e.clientX - rect.left) * scaleX;
+            // Setup canvas hakim
+            judgeCanvas.width = currentSliceX;
+            judgeCanvas.height = slitCanvas.height;
             
-            // Cari masa rakaman terdekat dengan titik X
-            let markedTime = "0.00";
-            for(let i=0; i<sliceData.length; i++) {
-                if(sliceData[i].x >= clickX) {
-                    markedTime = sliceData[i].time;
-                    break;
+            renderJudgeCanvas();
+            renderTempMarksTable();
+        }
+
+        function cancelJudging() {
+            if(confirm("Batal sesi ini? Tangkapan gambar tadi akan hilang.")) {
+                document.getElementById('section-judge').classList.add('hidden');
+                document.getElementById('section-finish').classList.remove('hidden');
+                document.getElementById('mode-selector').classList.add('hidden'); // Keep hidden since we are in finish mode
+                
+                // Clear raw data
+                currentSliceX = 0;
+                sliceData = [];
+                tempMarks = [];
+            }
+        }
+
+        // Convert Click X to Time accurately
+        function getTimeFromX(targetX) {
+            if(sliceData.length === 0) return "0.00";
+            let closest = sliceData;
+            let minDiff = Math.abs(targetX - closest.x);
+            for(let i=1; i<sliceData.length; i++) {
+                let diff = Math.abs(targetX - sliceData[i].x);
+                if(diff < minDiff) {
+                    minDiff = diff;
+                    closest = sliceData[i];
                 }
             }
-            
-            // Konfirmasi dan masuk ke jadual
-            if(confirm(`Sahkan penamat pada masa: ${markedTime}s ?`)) {
-                addResultMark(clickX, markedTime);
-            }
-        });
-
-        function addResultMark(clickX, time) {
-            // Potong sebahagian gambar untuk dijadikan rujukan (Proof)
-            const cropWidth = 400; // lebar gambar bukti
-            const startX = Math.max(0, clickX - cropWidth / 2);
-            const actualCropWidth = Math.min(cropWidth, currentSliceX - startX);
-            
-            const tempCanvas = document.createElement('canvas');
-            tempCanvas.width = actualCropWidth;
-            tempCanvas.height = slitCanvas.height;
-            const ctx = tempCanvas.getContext('2d');
-            
-            ctx.drawImage(slitCanvas, startX, 0, actualCropWidth, slitCanvas.height, 0, 0, actualCropWidth, slitCanvas.height);
-            
-            // Lukis garisan dan masa atas bukti
-            const lineX = clickX - startX;
-            ctx.strokeStyle = "red";
-            ctx.lineWidth = 4;
-            ctx.beginPath();
-            ctx.moveTo(lineX, 0);
-            ctx.lineTo(lineX, tempCanvas.height);
-            ctx.stroke();
-            
-            ctx.fillStyle = "rgba(0,0,0,0.8)";
-            ctx.fillRect(lineX - 40, 20, 80, 40);
-            ctx.fillStyle = "white";
-            ctx.font = "bold 24px Arial";
-            ctx.textAlign = "center";
-            ctx.fillText(time + "s", lineX, 48);
-            
-            const imgData = tempCanvas.toDataURL('image/jpeg', 0.8);
-            
-            marks.push({ x: clickX, time: time });
-            
-            results.push({
-                time: time,
-                img: imgData
-            });
-            
-            renderFinalSlitScanWithMarks();
-            renderTable();
+            return closest.time;
         }
 
-        // --- FINE TUNE, PADAM & KEMASKINI UI ---
-        function updateRecordTime(index, newTime) {
+        // Convert adjusted Time back to X for drawing red line
+        function getXFromTime(targetTime) {
+            if(sliceData.length === 0) return 0;
+            let t = parseFloat(targetTime);
+            let closest = sliceData;
+            let minDiff = Math.abs(t - parseFloat(closest.time));
+            for(let i=1; i<sliceData.length; i++) {
+                let diff = Math.abs(t - parseFloat(sliceData[i].time));
+                if(diff < minDiff) {
+                    minDiff = diff;
+                    closest = sliceData[i];
+                }
+            }
+            return closest.x;
+        }
+
+        // Klik pada Kanvas Hakim
+        judgeCanvas.addEventListener('click', function(e) {
+            const rect = judgeCanvas.getBoundingClientRect();
+            // Kira skala x sebab canvas direndere pada height tertentu dengan width 'auto'
+            const scaleX = judgeCanvas.width / rect.width;
+            const clickX = (e.clientX - rect.left) * scaleX;
+            
+            const markedTime = getTimeFromX(clickX);
+            
+            // Tambah ke senarai sementara (dengan ID unik)
+            tempMarks.push({
+                id: Date.now() + Math.random(), // Unique ID
+                x: getXFromTime(markedTime), // Recalculate true X
+                time: markedTime
+            });
+            
+            renderJudgeCanvas();
+            renderTempMarksTable();
+        });
+
+        // Lukis Base image + Tanda Pelari
+        function renderJudgeCanvas() {
+            jCtx.drawImage(slitCanvas, 0, 0, currentSliceX, slitCanvas.height, 0, 0, currentSliceX, slitCanvas.height);
+            
+            tempMarks.forEach(m => {
+                jCtx.strokeStyle = "#ef4444"; // red-500
+                jCtx.lineWidth = 4;
+                jCtx.beginPath();
+                jCtx.moveTo(m.x, 0);
+                jCtx.lineTo(m.x, judgeCanvas.height);
+                jCtx.stroke();
+                
+                // Lukis Kotak Masa
+                jCtx.fillStyle = "rgba(0,0,0,0.8)";
+                jCtx.fillRect(m.x - 50, 20, 100, 45);
+                jCtx.fillStyle = "#facc15"; // yellow-400
+                jCtx.font = "bold 26px Arial";
+                jCtx.textAlign = "center";
+                jCtx.fillText(m.time + "s", m.x, 52);
+            });
+        }
+
+        // Adjust Masa (Fine Tune)
+        function adjustTempMark(id, deltaSec) {
+            let mark = tempMarks.find(m => m.id === id);
+            if(mark) {
+                let newTime = (parseFloat(mark.time) + deltaSec).toFixed(2);
+                if (newTime < 0) newTime = "0.00";
+                
+                mark.time = newTime;
+                mark.x = getXFromTime(newTime);
+                
+                renderJudgeCanvas();
+                renderTempMarksTable();
+            }
+        }
+
+        function deleteTempMark(id) {
+            tempMarks = tempMarks.filter(m => m.id !== id);
+            renderJudgeCanvas();
+            renderTempMarksTable();
+        }
+
+        function renderTempMarksTable() {
+            const tbody = document.getElementById('temp-marks-table');
+            
+            if(tempMarks.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="3" class="text-center py-4 text-slate-500 italic text-sm">Sila klik pada gambar di atas untuk menanda pelari.</td></tr>`;
+                return;
+            }
+
+            // Susun sementara mengikut masa untuk UI yang kemas
+            const sortedMarks = [...tempMarks].sort((a,b) => parseFloat(a.time) - parseFloat(b.time));
+
+            tbody.innerHTML = sortedMarks.map((m, index) => {
+                return `
+                <tr class="border-b border-slate-700/50 hover:bg-slate-800/60 transition-colors">
+                    <td class="py-2 px-3 font-bold text-yellow-400 text-base w-24">Pelari #${index + 1}</td>
+                    <td class="px-2 text-center flex items-center justify-center gap-2 py-2">
+                        <button onclick="adjustTempMark(${m.id}, -0.05)" class="bg-slate-700 hover:bg-slate-600 px-2 py-1 rounded text-xs font-bold border border-slate-600">-0.05</button>
+                        <button onclick="adjustTempMark(${m.id}, -0.01)" class="bg-slate-700 hover:bg-slate-600 px-2 py-1 rounded text-xs font-bold border border-slate-600">-0.01</button>
+                        
+                        <span class="font-mono text-xl font-black w-20 text-center">${m.time}</span>
+                        
+                        <button onclick="adjustTempMark(${m.id}, 0.01)" class="bg-slate-700 hover:bg-slate-600 px-2 py-1 rounded text-xs font-bold border border-slate-600">+0.01</button>
+                        <button onclick="adjustTempMark(${m.id}, 0.05)" class="bg-slate-700 hover:bg-slate-600 px-2 py-1 rounded text-xs font-bold border border-slate-600">+0.05</button>
+                    </td>
+                    <td class="py-2 px-2 text-center">
+                        <button onclick="deleteTempMark(${m.id})" class="bg-red-500/20 hover:bg-red-500/50 text-red-400 border border-red-500/30 px-3 py-1 rounded text-xs font-bold transition-colors">X</button>
+                    </td>
+                </tr>
+                `;
+            }).join('');
+        }
+
+        // ==========================================
+        // PROSES SIMPAN KEPUTUSAN HAKIM
+        // ==========================================
+        function saveAndExitJudge() {
+            if(tempMarks.length === 0) {
+                alert("Anda belum menanda mana-mana pelari. Jika ingin batal, tekan 'Batal & Kembali'.");
+                return;
+            }
+
+            if(confirm("Sahkan masa dan simpan semua keputusan ini ke jadual utama?")) {
+                
+                // Hasilkan gambar crop (bukti) untuk setiap pelari yang ditanda
+                tempMarks.forEach(m => {
+                    const cropWidth = 400; // Lebar imej bukti
+                    const startX = Math.max(0, m.x - cropWidth / 2);
+                    const actualCropWidth = Math.min(cropWidth, currentSliceX - startX);
+                    
+                    const proofCanvas = document.createElement('canvas');
+                    proofCanvas.width = actualCropWidth;
+                    proofCanvas.height = slitCanvas.height;
+                    const pCtx = proofCanvas.getContext('2d');
+                    
+                    // Salin bahagian raw gambar
+                    pCtx.drawImage(slitCanvas, startX, 0, actualCropWidth, slitCanvas.height, 0, 0, actualCropWidth, slitCanvas.height);
+                    
+                    // Lukis garisan merah & label masa atas gambar bukti ini
+                    const lineX = m.x - startX;
+                    pCtx.strokeStyle = "red";
+                    pCtx.lineWidth = 4;
+                    pCtx.beginPath();
+                    pCtx.moveTo(lineX, 0);
+                    pCtx.lineTo(lineX, proofCanvas.height);
+                    pCtx.stroke();
+                    
+                    pCtx.fillStyle = "rgba(0,0,0,0.8)";
+                    pCtx.fillRect(lineX - 50, 20, 100, 45);
+                    pCtx.fillStyle = "#facc15";
+                    pCtx.font = "bold 26px Arial";
+                    pCtx.textAlign = "center";
+                    pCtx.fillText(m.time + "s", lineX, 52);
+                    
+                    const imgData = proofCanvas.toDataURL('image/jpeg', 0.8);
+                    
+                    // Masukkan ke jadual rasmi
+                    results.push({
+                        time: m.time,
+                        img: imgData
+                    });
+                });
+
+                // Clear memory
+                currentSliceX = 0;
+                sliceData = [];
+                tempMarks = [];
+
+                // Kembali ke paparan utama
+                document.getElementById('section-judge').classList.add('hidden');
+                document.getElementById('section-finish').classList.remove('hidden');
+                
+                // Kemaskini Jadual Rasmi
+                renderTable();
+            }
+        }
+
+        // ==========================================
+        // FINAL RESULTS TABLE & EXPORT
+        // ==========================================
+        function updateMainRecordTime(index, newTime) {
             if(results[index]) {
-                results[index].time = parseFloat(newTime).toFixed(2);
+                let t = parseFloat(newTime).toFixed(2);
+                if (t < 0) t = "0.00";
+                results[index].time = t;
                 updateSummary();
             }
         }
 
-        function deleteResult(index) {
-            if(confirm("Padam rekod ini?")) {
-                const timeToDel = results[index].time;
+        function deleteMainResult(index) {
+            if(confirm("Padam rekod keputusan ini?")) {
                 results.splice(index, 1);
-                
-                // Buang juga dari senarai "marks" garisan merah
-                marks = marks.filter(m => m.time !== timeToDel);
-                
                 renderTable();
-                renderFinalSlitScanWithMarks();
             }
         }
 
@@ -685,7 +838,6 @@
                 return;
             }
 
-            // Susun masa untuk top 3
             const sortedResults = [...results].map((r, i) => ({...r, originalIndex: i})).sort((a, b) => parseFloat(a.time) - parseFloat(b.time));
             
             let html = '<div class="grid grid-cols-3 gap-2 md:gap-4 w-full">';
@@ -712,7 +864,7 @@
             document.getElementById('result-count').innerText = results.length;
             
             if(results.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="4" class="text-center py-6 text-slate-500 italic text-sm">Tiada tangkapan dibuat lagi.</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="4" class="text-center py-6 text-slate-500 italic text-sm">Tiada keputusan rasmi direkodkan lagi.</td></tr>`;
                 updateSummary();
                 return;
             }
@@ -727,7 +879,7 @@
                     <td class="py-3 px-3 font-bold text-slate-400 ${textSize} w-16">#${index + 1}</td>
                     <td class="px-2 w-32 md:w-48">
                         <input type="number" step="0.01" value="${r.time}" 
-                            onchange="updateRecordTime(${index}, this.value)"
+                            onchange="updateMainRecordTime(${index}, this.value)"
                             class="${inputSize} bg-slate-900 border border-slate-600 text-yellow-300 font-mono font-bold rounded focus:ring-2 focus:ring-yellow-500 outline-none">
                     </td>
                     <td class="py-2 px-2 text-center flex justify-center">
@@ -736,7 +888,7 @@
                         </div>
                     </td>
                     <td class="py-2 px-2 text-center">
-                        <button onclick="deleteResult(${index})" class="bg-red-500/20 hover:bg-red-500/50 text-red-400 border border-red-500/30 px-3 py-1 rounded text-xs font-bold transition-colors">X</button>
+                        <button onclick="deleteMainResult(${index})" class="bg-red-500/20 hover:bg-red-500/50 text-red-400 border border-red-500/30 px-3 py-1 rounded text-xs font-bold transition-colors">X</button>
                     </td>
                 </tr>
                 `;
