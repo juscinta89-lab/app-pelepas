@@ -3,124 +3,172 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sistem Photo Finish PWA</title>
+    <title>Sprint Timer Pro - Photo Finish</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-database-compat.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     
     <style>
-        /* Garisan merah maya untuk kemasan photo finish */
+        /* CSS Animasi dan Overlay */
         .finish-line-overlay {
             position: absolute;
             top: 0;
             bottom: 0;
             left: 50%;
-            width: 4px;
-            background-color: rgba(255, 0, 0, 0.7);
+            width: 3px;
+            background-color: rgba(239, 68, 68, 0.85); /* Tailwind red-500 */
+            box-shadow: 0 0 8px rgba(239, 68, 68, 0.8);
             transform: translateX(-50%);
             z-index: 10;
         }
-        /* Sembunyikan scrollbar tapi benarkan scroll */
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        .glass-panel {
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
     </style>
 </head>
-<body class="bg-slate-900 text-white font-sans pb-10 min-h-screen">
+<body class="bg-slate-900 text-white font-sans pb-10 min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
 
     <div id="app" class="max-w-md mx-auto p-4">
-        <h1 class="text-2xl font-bold text-center mb-6 text-yellow-400 mt-4">⚡ SPRINT TIMER PRO</h1>
-
-        <div id="mode-selector" class="flex gap-4 mb-8">
-            <button onclick="setMode('starter')" class="flex-1 bg-blue-600 p-4 rounded-lg font-bold hover:bg-blue-500 shadow-lg transition-transform active:scale-95">MOD PELEPAS</button>
-            <button onclick="setMode('finish')" class="flex-1 bg-green-600 p-4 rounded-lg font-bold hover:bg-green-500 shadow-lg transition-transform active:scale-95">MOD PENAMAT</button>
+        <div class="text-center mb-8 mt-6">
+            <h1 class="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-orange-500 tracking-wider flex items-center justify-center gap-2">
+                <svg class="w-8 h-8 text-yellow-400" fill="currentColor" viewBox="0 0 20 20"><path d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.381z"/></svg>
+                SPRINT TIMER
+            </h1>
+            <p class="text-slate-400 text-sm tracking-widest uppercase mt-1">Sistem Photo Finish Profesional</p>
         </div>
 
-        <div id="section-starter" class="hidden text-center fade-in">
-            <div class="bg-slate-800 p-6 rounded-2xl border-2 border-blue-500 shadow-xl relative overflow-hidden">
-                <h2 class="text-xl font-bold mb-2 border-b border-slate-600 pb-2">Unit Pelepas</h2>
-                <p class="mb-4 text-lg">Status: <span id="starter-status" class="text-yellow-400 font-bold">Menunggu</span></p>
+        <div id="mode-selector" class="flex gap-4 mb-8">
+            <button onclick="setMode('starter')" class="flex-1 bg-gradient-to-b from-blue-500 to-blue-700 p-5 rounded-2xl font-bold hover:from-blue-400 hover:to-blue-600 shadow-lg shadow-blue-900/50 transition-all active:scale-95 border border-blue-400/30 flex flex-col items-center gap-2">
+                <span class="text-2xl">🔫</span>
+                MOD PELEPAS
+            </button>
+            <button onclick="setMode('finish')" class="flex-1 bg-gradient-to-b from-emerald-500 to-emerald-700 p-5 rounded-2xl font-bold hover:from-emerald-400 hover:to-emerald-600 shadow-lg shadow-emerald-900/50 transition-all active:scale-95 border border-emerald-400/30 flex flex-col items-center gap-2">
+                <span class="text-2xl">🏁</span>
+                MOD PENAMAT
+            </button>
+        </div>
+
+        <div id="section-starter" class="hidden text-center transition-opacity duration-300">
+            <div class="glass-panel p-6 rounded-3xl shadow-2xl relative overflow-hidden">
+                <h2 class="text-lg font-bold mb-1 text-blue-400 uppercase tracking-widest">Unit Pelepas</h2>
+                <p class="mb-6 text-sm text-slate-300">Status: <span id="starter-status" class="text-yellow-400 font-bold bg-yellow-400/10 px-2 py-1 rounded-md">Menunggu</span></p>
                 
-                <button id="arm-btn" class="w-full bg-red-500 hover:bg-red-400 p-6 rounded-xl text-2xl font-black shadow-lg transition-all active:scale-95 mb-4">
-                    SEDIA (ARM)
+                <button id="arm-btn" disabled class="w-full bg-slate-700 p-6 rounded-2xl text-2xl font-black shadow-lg transition-all mb-4 text-slate-400 border border-slate-600 cursor-not-allowed">
+                    SILA KALIBRASI MIC...
                 </button>
                 
-                <button id="reset-btn" class="w-full bg-slate-600 hover:bg-slate-500 p-4 rounded-xl font-bold shadow-lg mt-2 transition-colors">
-                    🔄 RESET SISTEM & MASA
+                <button id="reset-btn" class="w-full bg-slate-700 hover:bg-slate-600 p-4 rounded-xl font-bold shadow-lg mt-2 transition-colors border border-slate-600 flex justify-center items-center gap-2">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                    Reset Sistem
                 </button>
 
-                <div class="mt-6 bg-slate-700 p-4 rounded-xl border border-slate-500 text-left">
-                    <label for="threshold-slider" class="block text-sm font-bold mb-2 text-yellow-300">
-                        🎚️ Sensitiviti Mic (Threshold): <span id="threshold-val" class="text-white">70</span>
+                <div class="mt-8 bg-slate-800/80 p-5 rounded-2xl border border-slate-600 text-left relative">
+                    <div class="flex justify-between items-center mb-4">
+                        <label class="text-sm font-bold text-yellow-300 flex items-center gap-2">
+                            🎤 Kalibrasi Bunyi
+                        </label>
+                        <button id="test-mic-btn" class="text-xs bg-blue-600 hover:bg-blue-500 px-3 py-1.5 rounded-lg font-bold transition-colors">Aktifkan Mic</button>
+                    </div>
+
+                    <div class="mb-4">
+                        <div class="flex justify-between text-xs mb-1 text-slate-400">
+                            <span>Tahap Bunyi Semasa</span>
+                            <span id="mic-level-text" class="font-mono">0%</span>
+                        </div>
+                        <div class="w-full bg-slate-900 rounded-full h-3 border border-slate-700 relative overflow-hidden">
+                            <div id="mic-level-bar" class="bg-gradient-to-r from-green-400 to-green-500 h-full rounded-full transition-all duration-75" style="width: 0%"></div>
+                        </div>
+                    </div>
+
+                    <label for="threshold-slider" class="flex justify-between text-xs mb-1 text-slate-400 mt-4">
+                        <span>Had Cetusan (Threshold)</span>
+                        <span id="threshold-val" class="text-white font-bold font-mono bg-slate-900 px-2 rounded">70</span>
                     </label>
-                    <input type="range" id="threshold-slider" min="10" max="150" value="70" class="w-full accent-yellow-400">
-                    <p class="text-xs mt-2 text-slate-300">Ubah nilai ini berdasarkan bunyi bising di padang. Makin tinggi nilai, makin kuat bunyi pistol diperlukan.</p>
+                    <div class="relative w-full h-6 flex items-center">
+                        <input type="range" id="threshold-slider" min="10" max="150" value="70" class="w-full accent-yellow-400 z-10 relative cursor-pointer">
+                    </div>
+                    <p class="text-[11px] mt-2 text-slate-400 leading-relaxed">Aktifkan mic dan hasilkan bunyi pistol. Ubah *threshold* melebihi bunyi bising padang, tetapi di bawah bunyi pistol.</p>
                 </div>
             </div>
         </div>
 
-        <div id="section-finish" class="hidden fade-in">
-            <div class="bg-slate-800 p-4 rounded-xl mb-4 shadow-xl border-2 border-green-600">
-                <div id="stopwatch" class="text-6xl font-mono text-center py-2 text-yellow-300 tracking-wider">00:00.00</div>
+        <div id="section-finish" class="hidden transition-opacity duration-300">
+            <div class="glass-panel p-5 rounded-3xl mb-5 shadow-2xl relative">
+                <div class="absolute top-0 right-0 bg-red-600 text-white text-[10px] font-bold px-2 py-1 rounded-bl-lg rounded-tr-3xl tracking-wider hidden" id="live-indicator">LIVE REC</div>
                 
-                <div class="relative mb-4 overflow-hidden rounded-lg border-2 border-slate-700 bg-black">
-                    <video id="webcam" autoplay playsinline class="w-full object-cover"></video>
+                <div id="stopwatch" class="text-7xl font-black text-center py-2 text-transparent bg-clip-text bg-gradient-to-b from-white to-slate-400 tracking-wider font-mono shadow-sm">00:00<span class="text-4xl text-yellow-400">.00</span></div>
+                
+                <div class="relative mb-5 mt-2 overflow-hidden rounded-2xl border border-slate-600 bg-black shadow-inner">
+                    <video id="webcam" autoplay playsinline class="w-full object-cover aspect-video"></video>
                     <div class="finish-line-overlay"></div>
                 </div>
 
                 <div class="grid grid-cols-2 gap-3 mb-4">
-                    <button id="auto-btn" onclick="toggleAutoCapture()" class="bg-purple-600 hover:bg-purple-500 font-bold p-3 rounded-lg text-sm transition-colors shadow">
-                        📷 AUTO: OFF
+                    <button id="auto-btn" onclick="toggleAutoCapture()" class="bg-gradient-to-b from-purple-500 to-purple-700 border border-purple-400/30 hover:from-purple-400 hover:to-purple-600 font-bold py-3 px-2 rounded-xl text-sm transition-all shadow-lg active:scale-95 flex flex-col items-center justify-center gap-1">
+                        <span class="text-lg">🤖</span>
+                        <span>AUTO: OFF</span>
                     </button>
-                    <button onclick="captureFinish()" class="bg-yellow-500 text-black hover:bg-yellow-400 font-bold p-3 rounded-lg text-sm shadow">
-                        📸 SNAP MANUAL
+                    <button onclick="captureFinish()" class="bg-gradient-to-b from-yellow-400 to-yellow-600 border border-yellow-300/30 text-black hover:from-yellow-300 hover:to-yellow-500 font-black py-3 px-2 rounded-xl text-sm shadow-lg active:scale-95 transition-all flex flex-col items-center justify-center gap-1">
+                        <span class="text-lg">📸</span>
+                        <span>SNAP MANUAL</span>
                     </button>
                 </div>
                 
-                <button id="stop-btn" onclick="stopRace()" class="w-full bg-red-600 hover:bg-red-500 font-bold p-3 rounded-lg shadow transition-colors">
-                    🛑 STOP JAM & AUTO
+                <button id="stop-btn" onclick="stopRace()" class="w-full bg-slate-700 hover:bg-slate-600 text-red-400 font-bold p-4 rounded-xl shadow-lg border border-slate-600 transition-colors flex items-center justify-center gap-2">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z"></path></svg>
+                    HENTIKAN JAM & AUTO
                 </button>
             </div>
 
-            <div class="bg-slate-800 rounded-xl p-4 shadow-xl">
-                <h3 class="font-bold mb-3 border-b border-slate-600 pb-2 text-lg text-green-400 flex justify-between">
-                    <span>Keputusan Rasmi</span>
-                    <span id="result-count" class="text-sm bg-slate-700 px-2 rounded text-white">0</span>
-                </h3>
+            <div class="glass-panel rounded-3xl p-5 shadow-2xl">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="font-bold text-lg text-emerald-400 uppercase tracking-widest flex items-center gap-2">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z"></path></svg>
+                        Keputusan
+                    </h3>
+                    <span id="result-count" class="text-sm bg-emerald-500/20 text-emerald-300 px-3 py-1 rounded-full font-bold border border-emerald-500/30">0</span>
+                </div>
                 
-                <div class="overflow-x-auto no-scrollbar max-h-64 overflow-y-auto">
+                <div class="overflow-x-auto no-scrollbar max-h-72 overflow-y-auto rounded-xl border border-slate-700 bg-slate-900/50">
                     <table class="w-full text-left text-sm whitespace-nowrap">
-                        <thead class="sticky top-0 bg-slate-800 z-10">
-                            <tr class="text-slate-400">
-                                <th class="py-2 px-2">Pos</th>
-                                <th>Masa</th>
-                                <th>Bukti (Photo Finish)</th>
+                        <thead class="sticky top-0 bg-slate-800 z-10 shadow-sm">
+                            <tr class="text-slate-400 text-xs uppercase tracking-wider">
+                                <th class="py-3 px-3">Pos</th>
+                                <th class="px-2">Masa (s) - Boleh Edit</th>
+                                <th class="px-2 text-center">Bukti Gambar</th>
                             </tr>
                         </thead>
                         <tbody id="results-table">
                             </tbody>
                     </table>
                 </div>
-                <button onclick="exportPDF()" class="w-full mt-4 bg-white text-black font-bold p-3 rounded-lg hover:bg-slate-200 transition-colors">📄 Muat Turun PDF</button>
+                
+                <button onclick="exportPDF()" class="w-full mt-5 bg-white text-slate-900 font-black p-4 rounded-xl hover:bg-slate-200 transition-colors shadow-lg shadow-white/10 flex justify-center items-center gap-2">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                    MUAT TURUN PDF RASMI
+                </button>
             </div>
         </div>
     </div>
 
     <script>
         // --- 1. KONFIGURASI FIREBASE ---
-        // PENTING: GANTIKAN DENGAN MAKLUMAT DARI FIREBASE CONSOLE ANDA
-    const firebaseConfig = {
-  apiKey: "AIzaSyB6cOX9OoM6-Z2r7svyGUaMC7SzwJzpF5Q",
-  authDomain: "sprint-timer-v2.firebaseapp.com",
-  databaseURL: "https://sprint-timer-v2-default-rtdb.asia-southeast1.firebasedatabase.app",
-  projectId: "sprint-timer-v2",
-  storageBucket: "sprint-timer-v2.firebasestorage.app",
-  messagingSenderId: "490693241804",
-  appId: "1:490693241804:web:264ae3d32f2df78a9f8b69",
-  measurementId: "G-PMT4YC1GNW"
-};
+        const firebaseConfig = {
+            apiKey: "AIzaSyB6cOX9OoM6-Z2r7svyGUaMC7SzwJzpF5Q",
+            authDomain: "sprint-timer-v2.firebaseapp.com",
+            databaseURL: "https://sprint-timer-v2-default-rtdb.asia-southeast1.firebasedatabase.app",
+            projectId: "sprint-timer-v2",
+            storageBucket: "sprint-timer-v2.firebasestorage.app",
+            messagingSenderId: "490693241804",
+            appId: "1:490693241804:web:264ae3d32f2df78a9f8b69",
+            measurementId: "G-PMT4YC1GNW"
+        };
         
-        // Initialize Firebase
         if (!firebase.apps.length) {
             firebase.initializeApp(firebaseConfig);
         }
@@ -133,7 +181,12 @@
         let results = [];
         let stopwatchReqId;
         let isRaceStopped = false;
-        let serverOffset = 0; // Pembolehubah untuk membaiki clock skew
+        let serverOffset = 0; 
+
+        // Mic & Audio Vars
+        let isMicActive = false;
+        let audioContext, analyser, dataArray;
+        let currentThreshold = 70; 
 
         // Auto-Capture Vars
         let autoCaptureActive = false;
@@ -141,7 +194,7 @@
         let captureCooldown = false;
         let autoCaptureReqId;
 
-        // --- 3. DAPATKAN OFFSET MASA PELAYAN FIREBASE ---
+        // --- 3. OFFSET MASA PELAYAN FIREBASE ---
         db.ref('.info/serverTimeOffset').on('value', function(snapshot) {
             serverOffset = snapshot.val() || 0;
         });
@@ -158,7 +211,7 @@
         // BAHAGIAN LOGIK: MOD PELEPAS (STARTER)
         // ==========================================
         const armBtn = document.getElementById('arm-btn');
-        let currentThreshold = 70; 
+        const testMicBtn = document.getElementById('test-mic-btn');
 
         // Update Slider UI
         document.getElementById('threshold-slider').addEventListener('input', (e) => {
@@ -166,76 +219,110 @@
             document.getElementById('threshold-val').innerText = currentThreshold;
         });
 
-        // Butang Sedia (Arm)
-        armBtn.addEventListener('click', async () => {
-            isArmed = !isArmed;
-            if(isArmed) {
-                armBtn.innerText = "🎤 MENDENGAR...";
-                armBtn.classList.replace('bg-red-500', 'bg-green-500');
-                armBtn.classList.replace('hover:bg-red-400', 'hover:bg-green-400');
-                document.getElementById('starter-status').innerText = "Sedia (Menanti Bunyi)";
-                document.getElementById('starter-status').classList.replace('text-yellow-400', 'text-green-400');
-                startAudioDetection();
-            } else {
-                armBtn.innerText = "SEDIA (ARM)";
-                armBtn.classList.replace('bg-green-500', 'bg-red-500');
-                armBtn.classList.replace('hover:bg-green-400', 'hover:bg-red-400');
-                document.getElementById('starter-status').innerText = "Dibatalkan";
-                document.getElementById('starter-status').classList.replace('text-green-400', 'text-yellow-400');
+        // Butang Aktifkan Mic (Untuk Kalibrasi)
+        testMicBtn.addEventListener('click', async () => {
+            if(!isMicActive) {
+                await startAudioStream();
             }
         });
+
+        // Butang Sedia (Arm)
+        armBtn.addEventListener('click', () => {
+            if(!isMicActive) return alert("Sila aktifkan mic terlebih dahulu untuk kalibrasi.");
+            
+            isArmed = !isArmed;
+            if(isArmed) {
+                armBtn.innerHTML = `<span class="animate-pulse">🔴 MENANTI BUNYI PISTOL...</span>`;
+                armBtn.className = "w-full bg-red-600 hover:bg-red-500 p-6 rounded-2xl text-2xl font-black shadow-lg shadow-red-900/50 transition-all active:scale-95 mb-4 border border-red-400";
+                
+                const statusBadge = document.getElementById('starter-status');
+                statusBadge.innerText = "Sedia (Armed)";
+                statusBadge.className = "text-red-400 font-bold bg-red-400/10 px-2 py-1 rounded-md animate-pulse";
+            } else {
+                resetArmButton();
+            }
+        });
+
+        function resetArmButton() {
+            isArmed = false;
+            armBtn.innerText = "SEDIA (ARM)";
+            armBtn.className = "w-full bg-gradient-to-b from-blue-500 to-blue-700 hover:from-blue-400 hover:to-blue-600 p-6 rounded-2xl text-2xl font-black shadow-lg shadow-blue-900/50 transition-all active:scale-95 mb-4 border border-blue-400";
+            
+            const statusBadge = document.getElementById('starter-status');
+            statusBadge.innerText = "Menunggu";
+            statusBadge.className = "text-yellow-400 font-bold bg-yellow-400/10 px-2 py-1 rounded-md";
+        }
 
         // Butang Reset
         document.getElementById('reset-btn').addEventListener('click', () => {
             if(confirm("Adakah anda pasti mahu reset sistem? Masa mula dan rekod semasa akan dibersihkan.")) {
                 db.ref('race/start').remove(); 
-                
-                // Update UI Starter
-                document.getElementById('starter-status').innerText = "Menunggu";
-                document.getElementById('starter-status').classList.replace('text-green-400', 'text-yellow-400');
-                isArmed = false;
-                armBtn.innerText = "SEDIA (ARM)";
-                armBtn.className = "w-full bg-red-500 hover:bg-red-400 p-6 rounded-xl text-2xl font-black shadow-lg transition-all active:scale-95 mb-4";
+                resetArmButton();
             }
         });
 
-        // Logik Audio Mic
-        async function startAudioDetection() {
+        // Logik Audio Mic & Visualizer
+        async function startAudioStream() {
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
                 const source = audioContext.createMediaStreamSource(stream);
-                const analyser = audioContext.createAnalyser();
+                analyser = audioContext.createAnalyser();
                 analyser.fftSize = 256;
                 source.connect(analyser);
-                const dataArray = new Uint8Array(analyser.frequencyBinCount);
+                dataArray = new Uint8Array(analyser.frequencyBinCount);
                 
-                function checkAudio() {
-                    if(!isArmed) return;
-                    analyser.getByteFrequencyData(dataArray);
-                    let volume = dataArray.reduce((a, b) => a + b) / dataArray.length;
-                    
-                    if(volume > currentThreshold) { 
-                        triggerStart(); 
-                        isArmed = false;
-                        armBtn.innerText = "BAM! (Masa Berjalan)";
-                        armBtn.className = "w-full bg-slate-600 p-6 rounded-xl text-2xl font-black shadow-lg mb-4 text-slate-300 cursor-not-allowed";
-                        document.getElementById('starter-status').innerText = "Berlari";
-                    } else {
-                        requestAnimationFrame(checkAudio);
-                    }
-                }
-                checkAudio();
+                isMicActive = true;
+                testMicBtn.innerText = "Mic Aktif ✅";
+                testMicBtn.className = "text-xs bg-green-600/20 text-green-400 border border-green-500/50 px-3 py-1.5 rounded-lg font-bold";
+                testMicBtn.disabled = true;
+
+                // Bolehkan butang ARM
+                resetArmButton();
+                armBtn.disabled = false;
+
+                monitorAudio();
             } catch (err) {
                 alert("Sila benarkan akses Mikrofon: " + err.message);
-                isArmed = false;
-                armBtn.innerText = "SEDIA (ARM)";
-                armBtn.classList.replace('bg-green-500', 'bg-red-500');
             }
         }
 
+        function monitorAudio() {
+            if(!isMicActive) return;
+            
+            analyser.getByteFrequencyData(dataArray);
+            let volume = dataArray.reduce((a, b) => a + b) / dataArray.length;
+            
+            // Visualizer UI Update
+            let volPercent = Math.min((volume / 150) * 100, 100); // 150 sbg had max visual
+            const bar = document.getElementById('mic-level-bar');
+            bar.style.width = `${volPercent}%`;
+            document.getElementById('mic-level-text').innerText = `${Math.floor(volume)}`;
+            
+            // Tukar warna bar jika melepasi threshold
+            if(volume > currentThreshold) {
+                bar.className = "bg-gradient-to-r from-red-500 to-red-600 h-full rounded-full transition-all duration-75";
+            } else {
+                bar.className = "bg-gradient-to-r from-green-400 to-green-500 h-full rounded-full transition-all duration-75";
+            }
+
+            // Jika sistem sedang ARMED dan bunyi cecah threshold
+            if(isArmed && volume > currentThreshold) { 
+                triggerStart(); 
+                isArmed = false;
+                
+                armBtn.innerText = "BAM! (Masa Sedang Berjalan)";
+                armBtn.className = "w-full bg-slate-800 p-6 rounded-2xl text-2xl font-black shadow-inner mb-4 text-emerald-400 border border-emerald-500/30 cursor-not-allowed";
+                
+                const statusBadge = document.getElementById('starter-status');
+                statusBadge.innerText = "Sedang Berlari";
+                statusBadge.className = "text-emerald-400 font-bold bg-emerald-400/10 px-2 py-1 rounded-md";
+            }
+            
+            requestAnimationFrame(monitorAudio);
+        }
+
         function triggerStart() {
-            // Guna ServerValue.TIMESTAMP untuk elak isu perbezaan jam telefon
             db.ref('race/start').set({
                 timestamp: firebase.database.ServerValue.TIMESTAMP
             });
@@ -261,28 +348,23 @@
             const data = snapshot.val();
             
             if(data && data.timestamp) {
-                // KES A: LARIAN BARU BERMULA
                 startTime = data.timestamp;
                 isRaceStopped = false;
+                document.getElementById('live-indicator').classList.remove('hidden');
                 cancelAnimationFrame(stopwatchReqId);
                 updateStopwatch();
             } else {
-                // KES B: RESET DITEKAN DI UNIT PELEPAS
                 startTime = null;
                 isRaceStopped = true;
+                document.getElementById('live-indicator').classList.add('hidden');
                 
-                // 1. Matikan Jam
                 cancelAnimationFrame(stopwatchReqId);
-                document.getElementById('stopwatch').innerText = "00:00.00";
+                document.getElementById('stopwatch').innerHTML = `00:00<span class="text-4xl text-yellow-400">.00</span>`;
                 
-                // 2. Matikan Auto-Capture
                 if(autoCaptureActive) toggleAutoCapture();
                 
-                // 3. Bersihkan Keputusan
                 results = [];
                 renderTable();
-                
-                // 4. Bersihkan Memori Visual
                 previousPixels = null;
             }
         });
@@ -291,26 +373,26 @@
         function updateStopwatch() {
             if(!startTime || isRaceStopped) return;
             
-            // Gunakan masa pelayan sebenar dengan menambah offset
             const currentServerTime = Date.now() + serverOffset;
             let diff = (currentServerTime - startTime) / 1000;
-            
-            // Halang jam dari menunjukkan masa negatif akibat sedikit lag rangkaian
-            if(diff < 0) diff = 0;
+            if(diff < 0) diff = 0; // Fix perbezaan masa negatif
             
             const minutes = Math.floor(diff / 60).toString().padStart(2, '0');
             const seconds = Math.floor(diff % 60).toString().padStart(2, '0');
             const milliseconds = Math.floor((diff % 1) * 100).toString().padStart(2, '0');
             
-            document.getElementById('stopwatch').innerText = diff < 60 
-                ? `${seconds}.${milliseconds}` 
-                : `${minutes}:${seconds}.${milliseconds}`;
+            if(diff < 60) {
+                document.getElementById('stopwatch').innerHTML = `${seconds}<span class="text-4xl text-yellow-400">.${milliseconds}</span>`;
+            } else {
+                document.getElementById('stopwatch').innerHTML = `${minutes}:${seconds}<span class="text-4xl text-yellow-400">.${milliseconds}</span>`;
+            }
                 
             stopwatchReqId = requestAnimationFrame(updateStopwatch);
         }
 
         function stopRace() {
             isRaceStopped = true;
+            document.getElementById('live-indicator').classList.add('hidden');
             cancelAnimationFrame(stopwatchReqId);
             if(autoCaptureActive) toggleAutoCapture(); 
         }
@@ -319,7 +401,6 @@
         function captureFinish() {
             if(!startTime) return alert("Perlumbaan belum bermula!");
             
-            // Gunakan masa pelayan sebenar dengan menambah offset
             const currentServerTime = Date.now() + serverOffset;
             let diff = (currentServerTime - startTime) / 1000;
             if(diff < 0) diff = 0;
@@ -335,7 +416,7 @@
             ctx.drawImage(video, 0, 0);
             
             // Lukis Garisan Merah pada gambar
-            ctx.fillStyle = "rgba(255, 0, 0, 0.8)";
+            ctx.fillStyle = "rgba(239, 68, 68, 0.85)";
             ctx.fillRect(canvas.width / 2 - 2, 0, 4, canvas.height);
 
             const imgData = canvas.toDataURL('image/jpeg', 0.6); 
@@ -350,20 +431,18 @@
             const btn = document.getElementById('auto-btn');
             
             if(autoCaptureActive) {
-                btn.innerText = "📷 AUTO: ON (Aktif)";
-                btn.classList.replace('bg-purple-600', 'bg-green-600');
-                btn.classList.replace('hover:bg-purple-500', 'hover:bg-green-500');
+                btn.innerHTML = `<span class="text-lg animate-spin">⚙️</span><span>AUTO: ON</span>`;
+                btn.className = "bg-gradient-to-b from-emerald-500 to-emerald-700 border border-emerald-400/30 font-bold py-3 px-2 rounded-xl text-sm transition-all shadow-lg shadow-emerald-900/50 flex flex-col items-center justify-center gap-1 text-white";
                 previousPixels = null;
                 processVideoFrame();
             } else {
-                btn.innerText = "📷 AUTO: OFF";
-                btn.classList.replace('bg-green-600', 'bg-purple-600');
-                btn.classList.replace('hover:bg-green-500', 'hover:bg-purple-500');
+                btn.innerHTML = `<span class="text-lg">🤖</span><span>AUTO: OFF</span>`;
+                btn.className = "bg-gradient-to-b from-purple-500 to-purple-700 border border-purple-400/30 hover:from-purple-400 hover:to-purple-600 font-bold py-3 px-2 rounded-xl text-sm transition-all shadow-lg active:scale-95 flex flex-col items-center justify-center gap-1 text-white";
                 cancelAnimationFrame(autoCaptureReqId);
             }
         }
 
-        // Logik Pengesanan Pergerakan (Motion Detection)
+        // Logik Pengesanan Pergerakan
         function processVideoFrame() {
             if (!autoCaptureActive || isRaceStopped) return;
 
@@ -404,22 +483,36 @@
             autoCaptureReqId = requestAnimationFrame(processVideoFrame);
         }
 
+        // Fungsi Fine-Tune Masa
+        function updateRecordTime(index, newTime) {
+            if(results[index]) {
+                results[index].time = parseFloat(newTime).toFixed(2);
+            }
+        }
+
         // Kemaskini Jadual Keputusan
         function renderTable() {
             const tbody = document.getElementById('results-table');
             document.getElementById('result-count').innerText = results.length;
             
             if(results.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="3" class="text-center py-4 text-slate-500 italic">Tiada rekod.</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="3" class="text-center py-6 text-slate-500 italic text-sm">Belum ada peserta melepasi garisan penamat.</td></tr>`;
                 return;
             }
 
-            tbody.innerHTML = results.map(r => `
-                <tr class="border-b border-slate-700 bg-slate-800/80 hover:bg-slate-700 transition-colors">
-                    <td class="py-3 px-2 font-bold text-lg">${r.pos}</td>
-                    <td class="font-mono text-yellow-300 font-bold text-lg">${r.time}s</td>
-                    <td class="py-2">
-                        <img src="${r.img}" class="h-16 w-auto rounded border border-slate-500 shadow-sm cursor-pointer hover:opacity-80" onclick="window.open(this.src)">
+            tbody.innerHTML = results.map((r, index) => `
+                <tr class="border-b border-slate-700/50 bg-slate-800/40 hover:bg-slate-700/60 transition-colors">
+                    <td class="py-3 px-3 font-black text-xl text-slate-300 w-12">${r.pos}</td>
+                    <td class="px-2 w-32">
+                        <input type="number" step="0.01" value="${r.time}" 
+                            onchange="updateRecordTime(${index}, this.value)"
+                            class="w-24 bg-slate-900 border border-slate-600 text-yellow-300 font-mono font-bold text-lg p-1.5 rounded text-center focus:ring-2 focus:ring-yellow-500 outline-none">
+                    </td>
+                    <td class="py-2 px-2 text-center">
+                        <div class="inline-block relative rounded-lg border border-slate-600 overflow-hidden shadow-sm group cursor-pointer hover:border-yellow-400 transition-colors" onclick="window.open('${r.img}')">
+                            <img src="${r.img}" class="h-16 w-auto object-cover group-hover:scale-105 transition-transform">
+                            <div class="absolute inset-0 bg-black/20 group-hover:bg-transparent transition-colors"></div>
+                        </div>
                     </td>
                 </tr>
             `).join('');
@@ -436,34 +529,51 @@
             const doc = new jsPDF();
             
             doc.setFont("helvetica", "bold");
-            doc.setFontSize(20);
+            doc.setFontSize(22);
             doc.text("KEPUTUSAN RASMI LARIAN", 10, 20);
             
-            doc.setFontSize(12);
+            doc.setFontSize(11);
             doc.setFont("helvetica", "normal");
-            doc.text(`Tarikh: ${new Date().toLocaleString('ms-MY')}`, 10, 30);
+            doc.setTextColor(100, 100, 100);
+            doc.text(`Dicetak pada: ${new Date().toLocaleString('ms-MY')}`, 10, 28);
+            
+            // Garisan pembahagi
+            doc.setDrawColor(200, 200, 200);
+            doc.line(10, 32, 200, 32);
             
             let yPos = 45;
             
             results.forEach((r, i) => {
-                if (yPos > 250) {
+                if (yPos > 260) {
                     doc.addPage();
                     yPos = 20;
                 }
                 
+                doc.setTextColor(0, 0, 0);
+                doc.setFontSize(14);
                 doc.setFont("helvetica", "bold");
-                doc.text(`Tempat Ke-${r.pos}`, 10, yPos);
-                doc.setFont("helvetica", "normal");
-                doc.text(`Masa: ${r.time} saat`, 10, yPos + 6);
+                doc.text(`Tempat Ke-${r.pos}`, 15, yPos + 5);
                 
+                doc.setFontSize(16);
+                doc.setTextColor(220, 38, 38); // Merah
+                doc.text(`${r.time} s`, 15, yPos + 15);
+                
+                doc.setDrawColor(150, 150, 150);
+                doc.rect(60, yPos - 5, 80, 45); // Border gambar
                 doc.addImage(r.img, 'JPEG', 60, yPos - 5, 80, 45); 
+                
                 yPos += 55; 
+                
+                // Pembahagi antara peserta
+                if (i < results.length - 1) {
+                    doc.setDrawColor(230, 230, 230);
+                    doc.line(15, yPos - 5, 195, yPos - 5);
+                }
             });
             
             doc.save(`Keputusan_Larian_${Date.now()}.pdf`);
         }
         
-        // Initial render
         renderTable();
     </script>
 </body>
