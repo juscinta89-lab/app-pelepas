@@ -199,13 +199,13 @@
         const db = firebase.database();
 
         // --- 2. PEMBOLEH UBAH GLOBAL ---
-        let currentRoom = ''; // Pembolehubah baru untuk Bilik Kejohanan
+        let currentRoom = ''; 
         let currentMode = '';
         let startTime = null;
         let isArmed = false;
         let results = [];
         let stopwatchReqId;
-        let isRaceStopped = false;
+        let isRaceStopped = true; // Set awal kepada true supaya tidak ralat
         let serverOffset = 0; 
         let firebaseListener = null;
 
@@ -233,10 +233,8 @@
                 return;
             }
             
-            // Set bilik dan buang ruang kosong
             currentRoom = input.replace(/\s+/g, '');
             
-            // UI Updates
             document.getElementById('section-lobby').classList.add('hidden');
             document.getElementById('mode-selector').classList.remove('hidden');
             document.getElementById('btn-change-room').classList.remove('hidden');
@@ -251,7 +249,7 @@
             
             if(mode === 'finish') {
                 initCamera();
-                listenToStart(); // Mula mendengar isyarat pelepas untuk bilik ini
+                listenToStart(); 
             }
         }
 
@@ -294,7 +292,6 @@
 
         document.getElementById('reset-btn').addEventListener('click', () => {
             if(confirm(`Mahu reset sistem untuk kod kejohanan ${currentRoom}?`)) {
-                // Reset berdasarkan kod bilik
                 db.ref(`tournaments/${currentRoom}/start`).remove(); 
                 resetArmButton();
             }
@@ -348,7 +345,6 @@
         }
 
         function triggerStart() {
-            // Tembak start ke bilik tertentu sahaja
             db.ref(`tournaments/${currentRoom}/start`).set({ 
                 timestamp: firebase.database.ServerValue.TIMESTAMP 
             });
@@ -367,7 +363,6 @@
         }
 
         function listenToStart() {
-            // Mendengar event start hanya dari bilik yang sama
             firebaseListener = db.ref(`tournaments/${currentRoom}/start`).on('value', snapshot => {
                 const data = snapshot.val();
                 if(data && data.timestamp) {
@@ -377,16 +372,19 @@
                     cancelAnimationFrame(stopwatchReqId);
                     updateStopwatch();
                 } else {
-                    // Reset condition
+                    // Sistem di-reset atau menunggu larian bermula
                     startTime = null;
                     isRaceStopped = true;
                     document.getElementById('live-indicator').classList.add('hidden');
                     cancelAnimationFrame(stopwatchReqId);
                     document.getElementById('stopwatch').innerHTML = `00:00<span class="text-4xl text-yellow-400">.00</span>`;
-                    if(autoCaptureActive) toggleAutoCapture();
+                    
+                    // KEKALKAN AUTO JIKA IA SUDAH DIAKTIFKAN OLEH USER
+                    // Membuang line: if(autoCaptureActive) toggleAutoCapture();
+                    
                     results = [];
                     renderTable();
-                    previousPixels = null;
+                    previousPixels = null; // Kosongkan rujukan imej lama
                 }
             });
         }
@@ -413,7 +411,7 @@
             isRaceStopped = true;
             document.getElementById('live-indicator').classList.add('hidden');
             cancelAnimationFrame(stopwatchReqId);
-            if(autoCaptureActive) toggleAutoCapture(); 
+            if(autoCaptureActive) toggleAutoCapture(); // Dimatikan hanya jika user tekan STOP
         }
 
         function captureFinish() {
@@ -434,7 +432,6 @@
             
             const centerX = canvas.width / 2;
 
-            // Lukis Garisan & Masa
             ctx.fillStyle = "rgba(239, 68, 68, 0.9)";
             ctx.fillRect(centerX - 2, 0, 4, canvas.height);
 
@@ -470,13 +467,20 @@
         }
 
         function processVideoFrame() {
-            if (!autoCaptureActive || isRaceStopped) return;
+            // Hanya berhenti loop jika Fungsi dimatikan oleh user
+            if (!autoCaptureActive) return; 
+
             const video = document.getElementById('webcam');
-            if (video.videoWidth === 0) { 
+            
+            // Pintasan (Bypass) Loop: Jika larian belum mula ATAU kamera lambat respons
+            // Jangan tangkap pixel, hanya re-loop sambil tunggu pistol berbunyi
+            if (video.videoWidth === 0 || !startTime || isRaceStopped) { 
+                previousPixels = null; // Pastikan memori pixel bersih sebelum mula
                 autoCaptureReqId = requestAnimationFrame(processVideoFrame);
                 return;
             }
 
+            // --- Larian Sudah Bermula, Proses Pengesanan Pergerakan ---
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d', { willReadFrequently: true });
             canvas.width = video.videoWidth;
@@ -487,7 +491,7 @@
             const imageData = ctx.getImageData(lineX, 0, 1, canvas.height);
             const pixels = imageData.data;
 
-            if (previousPixels && !captureCooldown && startTime) {
+            if (previousPixels && !captureCooldown) {
                 let diffCount = 0;
                 for (let i = 0; i < pixels.length; i += 4) {
                     const rDiff = Math.abs(pixels[i] - previousPixels[i]);
@@ -627,7 +631,6 @@
             doc.save(`Keputusan_${currentRoom}_${Date.now()}.pdf`);
         }
         
-        // Panggilan awal untuk kosongkan rumusan pemenang
         updateSummary();
     </script>
 </body>
