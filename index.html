@@ -3,19 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sprint Timer Pro - AI Photo Finish</title>
+    <title>Sprint Timer Pro - Photo Finish</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
-    
     <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-database-compat.js"></script>
-    
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-core"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-converter"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-webgl"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/pose-detection"></script>
     
     <style>
         .finish-line-overlay {
@@ -23,12 +16,33 @@
             top: 0;
             bottom: 0;
             left: 50%;
-            width: 3px;
-            background-color: rgba(239, 68, 68, 0.85);
-            box-shadow: 0 0 8px rgba(239, 68, 68, 0.8);
+            width: 2px;
+            background-color: rgba(239, 68, 68, 0.9);
             transform: translateX(-50%);
             z-index: 10;
         }
+        
+        /* Reticle/Sasaran untuk Dada Pelari */
+        .torso-target {
+            position: absolute;
+            top: 35%;
+            bottom: 35%;
+            left: 50%;
+            width: 40px;
+            transform: translateX(-50%);
+            border-top: 3px solid rgba(250, 204, 21, 0.8);
+            border-bottom: 3px solid rgba(250, 204, 21, 0.8);
+            border-left: 1px solid rgba(250, 204, 21, 0.3);
+            border-right: 1px solid rgba(250, 204, 21, 0.3);
+            background-color: rgba(250, 204, 21, 0.1);
+            z-index: 11;
+            pointer-events: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 0 15px rgba(250, 204, 21, 0.2);
+        }
+
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
         .glass-panel {
@@ -53,7 +67,7 @@
             <h1 class="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-orange-500 tracking-wider flex items-center justify-center gap-2">
                 ⚡ SPRINT TIMER
             </h1>
-            <p class="text-slate-400 text-sm tracking-widest uppercase mt-1">AI Photo Finish System</p>
+            <p class="text-slate-400 text-sm tracking-widest uppercase mt-1">Sistem Photo Finish Optikal</p>
             
             <div id="room-badge" class="hidden mt-3">
                 <span class="bg-blue-900/50 text-blue-300 border border-blue-500/50 px-3 py-1 rounded-full text-xs font-bold tracking-widest">
@@ -145,15 +159,17 @@
                 <div class="relative mb-5 mt-2 overflow-hidden rounded-2xl border border-slate-600 bg-black shadow-inner">
                     <video id="webcam" autoplay playsinline class="w-full object-cover aspect-video"></video>
                     
-                    <canvas id="ai-overlay" class="absolute inset-0 w-full h-full pointer-events-none z-10"></canvas>
-                    
                     <div class="finish-line-overlay"></div>
+
+                    <div class="torso-target">
+                        <span style="writing-mode: vertical-rl; text-orientation: mixed;" class="text-[9px] font-bold text-yellow-400 tracking-widest">ARAS DADA</span>
+                    </div>
                 </div>
 
                 <div class="grid grid-cols-2 gap-3 mb-4">
                     <button id="auto-btn" onclick="toggleAutoCapture()" class="bg-gradient-to-b from-purple-500 to-purple-700 border border-purple-400/30 hover:from-purple-400 hover:to-purple-600 font-bold py-3 px-2 rounded-xl text-sm transition-all shadow-lg active:scale-95 flex flex-col items-center justify-center gap-1">
                         <span class="text-lg">🤖</span>
-                        <span>AI AUTO: OFF</span>
+                        <span>AUTO: OFF</span>
                     </button>
                     <button onclick="captureFinish()" class="bg-gradient-to-b from-yellow-400 to-yellow-600 border border-yellow-300/30 text-black hover:from-yellow-300 hover:to-yellow-500 font-black py-3 px-2 rounded-xl text-sm shadow-lg active:scale-95 transition-all flex flex-col items-center justify-center gap-1">
                         <span class="text-lg">📸</span>
@@ -236,12 +252,11 @@
         let audioContext, analyser, dataArray;
         let currentThreshold = 70; 
 
-        // AI & Auto-Capture
+        // Auto-Capture (Optical)
         let autoCaptureActive = false;
+        let previousPixels = null;
         let captureCooldown = false;
         let autoCaptureReqId;
-        let poseDetector = null;
-        let isAILoading = false;
 
         // --- 3. OFFSET MASA PELAYAN ---
         db.ref('.info/serverTimeOffset').on('value', function(snapshot) {
@@ -405,7 +420,7 @@
         }
 
         // ==========================================
-        // FINISH MODE (DENGAN TENSORFLOW.JS MOVENET)
+        // FINISH MODE
         // ==========================================
         async function initCamera() {
             try {
@@ -438,10 +453,7 @@
                     
                     results = [];
                     renderTable();
-                    
-                    const canvas = document.getElementById('ai-overlay');
-                    const ctx = canvas.getContext('2d');
-                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    previousPixels = null;
                 }
             });
         }
@@ -470,12 +482,7 @@
             isRaceStopped = true;
             document.getElementById('live-indicator').classList.add('hidden');
             cancelAnimationFrame(stopwatchReqId);
-            
             if(autoCaptureActive) toggleAutoCapture(); 
-            
-            const canvas = document.getElementById('ai-overlay');
-            const ctx = canvas.getContext('2d');
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
         }
 
         function captureFinish() {
@@ -517,115 +524,73 @@
             renderTable();
         }
 
-        async function initPoseAI() {
-            isAILoading = true;
-            const model = poseDetection.SupportedModels.MoveNet;
-            poseDetector = await poseDetection.createDetector(model, {
-                modelType: poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING
-            });
-            isAILoading = false;
-        }
-
-        async function toggleAutoCapture() {
+        function toggleAutoCapture() {
+            autoCaptureActive = !autoCaptureActive;
             const btn = document.getElementById('auto-btn');
             
-            if (!autoCaptureActive) {
-                if(!poseDetector && !isAILoading) {
-                    btn.innerHTML = `<span class="text-lg animate-spin">⏳</span><span>Muat Turun AI...</span>`;
-                    btn.disabled = true;
-                    await initPoseAI();
-                    btn.disabled = false;
-                }
-                
-                autoCaptureActive = true;
-                btn.innerHTML = `<span class="text-lg animate-spin">⚙️</span><span>AI AUTO: ON</span>`;
+            if(autoCaptureActive) {
+                btn.innerHTML = `<span class="text-lg animate-spin">⚙️</span><span>AUTO: ON</span>`;
                 btn.className = "bg-gradient-to-b from-emerald-500 to-emerald-700 border border-emerald-400/30 font-bold py-3 px-2 rounded-xl text-sm transition-all shadow-lg shadow-emerald-900/50 flex flex-col items-center justify-center gap-1 text-white";
-                
-                processAIVideoFrame(); 
-                
+                previousPixels = null;
+                processOpticalVideoFrame();
             } else {
-                autoCaptureActive = false;
-                btn.innerHTML = `<span class="text-lg">🤖</span><span>AI AUTO: OFF</span>`;
+                btn.innerHTML = `<span class="text-lg">🤖</span><span>AUTO: OFF</span>`;
                 btn.className = "bg-gradient-to-b from-purple-500 to-purple-700 border border-purple-400/30 hover:from-purple-400 hover:to-purple-600 font-bold py-3 px-2 rounded-xl text-sm transition-all shadow-lg active:scale-95 flex flex-col items-center justify-center gap-1 text-white";
-                
-                const canvas = document.getElementById('ai-overlay');
-                if (canvas) {
-                    const ctx = canvas.getContext('2d');
-                    ctx.clearRect(0, 0, canvas.width, canvas.height);
-                }
+                cancelAnimationFrame(autoCaptureReqId);
             }
         }
 
-        // --- LOGIK AI YANG DIPERBAIKI (SOKONGAN PANDANGAN SISI) ---
-        async function processAIVideoFrame() {
+        // --- PENGESANAN OPTIKAL BERFOKUS (DADA SAHAJA) ---
+        function processOpticalVideoFrame() {
             if (!autoCaptureActive) return; 
 
             const video = document.getElementById('webcam');
-            const aiCanvas = document.getElementById('ai-overlay');
-            const ctx = aiCanvas.getContext('2d');
             
-            if (aiCanvas.width !== video.videoWidth) {
-                aiCanvas.width = video.videoWidth;
-                aiCanvas.height = video.videoHeight;
-            }
-
-            if (video.videoWidth === 0 || !startTime || isRaceStopped || !poseDetector) { 
-                ctx.clearRect(0, 0, aiCanvas.width, aiCanvas.height);
-                requestAnimationFrame(processAIVideoFrame);
+            if (video.videoWidth === 0 || !startTime || isRaceStopped) { 
+                previousPixels = null; 
+                autoCaptureReqId = requestAnimationFrame(processOpticalVideoFrame);
                 return;
             }
 
-            try {
-                const poses = await poseDetector.estimatePoses(video);
-                ctx.clearRect(0, 0, aiCanvas.width, aiCanvas.height);
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d', { willReadFrequently: true });
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            ctx.drawImage(video, 0, 0);
 
-                if (poses.length > 0) {
-                    const keypoints = poses.keypoints;
+            // Fokus pada kawasan sasaran (Reticle) di tengah
+            // Mengikut CSS: top 35%, bottom 35% bererti ketinggian adalah 30% di tengah
+            const lineX = Math.floor(canvas.width / 2);
+            const targetStartY = Math.floor(canvas.height * 0.35);
+            const targetHeight = Math.floor(canvas.height * 0.30);
 
-                    // TITIK PENTING (DADA/TORSO): 5:Bahu Kiri, 6:Bahu Kanan, 11:Pinggul Kiri, 12:Pinggul Kanan
-                    // Untuk rakaman dari tepi, AI biasanya hanya nampak separuh badan dengan jelas.
-                    // Oleh itu, kita tapis mana-mana titik torso yang AI nampak sahaja (keyakinan > 0.2)
-                    const torsoPoints = [keypoints, keypoints, keypoints, keypoints]
-                                        .filter(p => p != null && p.score > 0.2); 
+            // Baca piksel HANYA dari zon sasaran dada ini
+            const imageData = ctx.getImageData(lineX, targetStartY, 1, targetHeight);
+            const pixels = imageData.data;
 
-                    // Asalkan AI jumpa sekurang-kurangnya 1 titik pada bahagian badan
-                    if (torsoPoints.length >= 1) {
-                        ctx.strokeStyle = '#10b981'; // Hijau
-                        ctx.lineWidth = 4;
-
-                        // Cari purata kedudukan X (tengah-tengah dada yang jelas dilihat)
-                        const avgX = torsoPoints.reduce((sum, p) => sum + p.x, 0) / torsoPoints.length;
-                        
-                        // Lukis Garisan AI Menegak mengekori badan pelari
-                        ctx.beginPath();
-                        ctx.moveTo(avgX, 0);
-                        ctx.lineTo(avgX, aiCanvas.height);
-                        ctx.stroke();
-
-                        // PENGIRAAN TRIGGER (Adakah badan melepasi garisan tengah?)
-                        if (!captureCooldown) {
-                            const finishLineX = video.videoWidth / 2;
-                            // Tambah sikit lebar sensitiviti tangkapan (8% daripada skrin)
-                            const triggerThreshold = video.videoWidth * 0.08;
-
-                            if (Math.abs(avgX - finishLineX) < triggerThreshold) {
-                                captureFinish();
-                                captureCooldown = true; 
-                                
-                                // Tukar warna garisan kepada Merah tanda "DITANGKAP"
-                                ctx.strokeStyle = '#ef4444'; 
-                                ctx.stroke();
-
-                                setTimeout(() => { captureCooldown = false; }, 800); 
-                            }
-                        }
-                    }
+            if (previousPixels && !captureCooldown) {
+                let diffCount = 0;
+                for (let i = 0; i < pixels.length; i += 4) {
+                    const rDiff = Math.abs(pixels[i] - previousPixels[i]);
+                    const gDiff = Math.abs(pixels[i+1] - previousPixels[i+1]);
+                    const bDiff = Math.abs(pixels[i+2] - previousPixels[i+2]);
+                    
+                    // Ambang sensitiviti warna (perbezaan objek yang melintas dengan latar belakang)
+                    if (rDiff + gDiff + bDiff > 100) diffCount++;
                 }
-            } catch (err) {
-                console.warn("AI Frame Skip: ", err);
-            }
 
-            requestAnimationFrame(processAIVideoFrame);
+                // Jika 10% daripada zon sasaran bertukar warna (dada pelari melintas)
+                if (diffCount > (targetHeight * 0.10)) {
+                    captureFinish();
+                    captureCooldown = true; 
+                    
+                    // Elakkan spam gambar untuk pelari yang sama (delay 0.8s)
+                    setTimeout(() => { captureCooldown = false; }, 800); 
+                }
+            }
+            
+            previousPixels = new Uint8ClampedArray(pixels);
+            autoCaptureReqId = requestAnimationFrame(processOpticalVideoFrame);
         }
 
         // --- FINE TUNE & UPDATE SUMMARY ---
