@@ -449,7 +449,7 @@
             }
         }
 
-        // 7. KLIK PADA GAMBAR UNTUK TANDA MASA
+        // 7. KLIK PADA GAMBAR UNTUK TANDA MASA (RALAT TELAH DIBAIKI DI SINI)
         slitCanvas.addEventListener('click', function(e) {
             if(isRecording) return alert("Sila HENTIKAN JAM/RAKAMAN terlebih dahulu sebelum menanda masa.");
             if(currentDrawX === 0) return;
@@ -469,7 +469,10 @@
 
         function cariMasaTerdekat(targetX) {
             if(mapMasa.length === 0) return "0.00";
-            let closest = mapMasa;
+            
+            // PEPijat DIBAIKI: Tambah untuk merujuk pada item pertama array
+            let closest = mapMasa; 
+            
             let minDiff = Math.abs(targetX - closest.x);
             for(let i=1; i<mapMasa.length; i++) {
                 let diff = Math.abs(targetX - mapMasa[i].x);
