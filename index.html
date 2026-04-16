@@ -1,0 +1,891 @@
+<!DOCTYPE html>
+<html lang="ms">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Sprint Timer Pro</title>
+
+    <link rel="manifest" href="./manifest.json">
+    <meta name="theme-color" content="#0f172a">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="SprintTimer">
+    <link rel="apple-touch-icon" href="./icons/icon-192.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png">
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-database-compat.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+    <style>
+        :root {
+            --navy: #0f172a;
+            --panel: rgba(30,41,59,0.92);
+            --blue: #3b82f6;
+            --red: #ef4444;
+            --yellow: #facc15;
+        }
+        * { box-sizing: border-box; }
+        body { background-color: var(--navy); color: #f8fafc; overscroll-behavior-y: none; font-family: 'Segoe UI', sans-serif; }
+
+        .finish-line {
+            position: absolute; top: 0; bottom: 0; left: 50%;
+            width: 2px; background: var(--red);
+            transform: translateX(-50%); z-index: 10;
+            box-shadow: 0 0 8px #ef4444aa;
+        }
+
+        /* ── Slit Outer — viewport zoom/pan ── */
+        #slit-outer {
+            width: 100%;
+            height: 260px;
+            overflow: hidden;
+            border: 2px solid #334155;
+            border-radius: 0.5rem;
+            background: #000;
+            position: relative;
+            cursor: crosshair;
+            touch-action: none;
+            user-select: none;
+        }
+        #slit-canvas {
+            position: absolute;
+            top: 0; left: 0;
+            transform-origin: 0 0;
+            image-rendering: pixelated;
+            image-rendering: crisp-edges;
+        }
+
+        /* ── Loupe ── */
+        #loupe {
+            display: none;
+            position: absolute;
+            width: 150px; height: 150px;
+            border-radius: 50%;
+            border: 3px solid var(--blue);
+            box-shadow: 0 0 0 2px #000, 0 8px 28px #000c;
+            pointer-events: none;
+            overflow: hidden;
+            z-index: 50;
+            background: #111;
+        }
+        #loupe-canvas { position: absolute; top: 0; left: 0; }
+        /* crosshair tengah */
+        #loupe::after {
+            content: ''; position: absolute;
+            top: 50%; left: 0; right: 0; height: 1px;
+            background: rgba(239,68,68,0.7);
+        }
+        #loupe::before {
+            content: ''; position: absolute;
+            left: 50%; top: 0; bottom: 0; width: 1px;
+            background: rgba(239,68,68,0.7);
+        }
+
+        /* ── Zoom Bar ── */
+        .zoom-bar {
+            display: flex; align-items: center; gap: 6px;
+            padding: 5px 8px;
+            background: rgba(15,23,42,0.9);
+            border: 1px solid #334155;
+            border-radius: 8px;
+        }
+        .zbtn {
+            width: 30px; height: 30px; flex-shrink: 0;
+            background: #1e293b; border: 1px solid #475569;
+            border-radius: 6px; color: white;
+            font-size: 17px; font-weight: bold;
+            cursor: pointer; display: flex; align-items: center; justify-content: center;
+            transition: background 0.1s; user-select: none;
+        }
+        .zbtn:active { background: #334155; transform: scale(0.9); }
+        #zoom-level-text { font-size: 11px; font-weight: bold; color: #94a3b8; min-width: 34px; text-align: center; font-family: monospace; }
+        #zoom-slider { flex: 1; accent-color: var(--blue); }
+        .loupe-btn {
+            padding: 4px 9px; font-size: 11px; font-weight: bold;
+            border-radius: 6px; border: 1px solid #475569;
+            background: #1e293b; color: #94a3b8; cursor: pointer;
+            transition: all 0.15s; white-space: nowrap; flex-shrink: 0;
+        }
+        .loupe-btn.on { background: #1e3a5f; border-color: var(--blue); color: #93c5fd; }
+        .zoom-tip { font-size: 10px; color: #475569; text-align: center; margin-top: 3px; }
+        .zoom-status-bar { display: flex; justify-content: space-between; font-size: 10px; color: #475569; margin-top: 3px; padding: 0 2px; }
+
+        .glass-panel { background: var(--panel); border: 1px solid rgba(255,255,255,0.08); }
+
+        /* ── PWA Banner ── */
+        #pwa-install-banner {
+            display: none; position: fixed; bottom: 0; left: 0; right: 0;
+            background: linear-gradient(135deg,#1e3a5f,#1e293b);
+            border-top: 2px solid var(--blue); padding: 14px 16px;
+            z-index: 9999; box-shadow: 0 -4px 20px #0008;
+            animation: slideUp 0.4s ease;
+        }
+        @keyframes slideUp { from{transform:translateY(100%)} to{transform:translateY(0)} }
+        #pwa-install-banner.show { display: flex; align-items: center; gap: 12px; }
+
+        #toast {
+            display: none; position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
+            background: #1e3a5f; border: 1px solid var(--blue); color: white;
+            padding: 10px 20px; border-radius: 999px; font-size: 13px; font-weight: bold;
+            z-index: 10000; white-space: nowrap;
+        }
+    </style>
+</head>
+<body class="font-sans pb-10 min-h-screen">
+
+<div id="toast"></div>
+
+<!-- PWA Banner -->
+<div id="pwa-install-banner">
+    <img src="./icons/icon-72.png" width="44" height="44" style="border-radius:10px;flex-shrink:0" alt="">
+    <div style="flex:1"><div style="font-weight:bold;font-size:14px">Pasang Sprint Timer</div><div style="font-size:11px;color:#94a3b8">Install sebagai App!</div></div>
+    <button onclick="installPWA()" style="background:var(--blue);color:#fff;font-weight:bold;font-size:12px;padding:8px 14px;border-radius:8px;border:none;cursor:pointer;flex-shrink:0">INSTALL</button>
+    <button onclick="closeBanner()" style="background:transparent;color:#94a3b8;border:none;cursor:pointer;font-size:20px;padding:0 4px;flex-shrink:0">✕</button>
+</div>
+
+<div id="app-container" class="max-w-md mx-auto p-4 transition-all duration-300">
+
+    <!-- Header -->
+    <div class="text-center mb-6 mt-2 relative">
+        <button onclick="location.reload()" id="btn-change-room" class="hidden absolute top-0 left-0 bg-slate-800 text-slate-300 text-xs px-3 py-2 rounded-lg hover:bg-slate-700 font-bold border border-slate-600">⬅ Keluar Bilik</button>
+        <h1 class="text-3xl font-black text-blue-500 tracking-wider mt-4">SPRINT TIMER</h1>
+        <p class="text-slate-400 text-xs tracking-widest uppercase mt-1">Sistem Slit-Scan Tepat</p>
+        <div id="room-badge" class="hidden mt-3">
+            <span class="bg-blue-900 text-blue-300 px-3 py-1 rounded-full text-xs font-bold tracking-widest">KOD: <span id="display-room-id"></span></span>
+        </div>
+    </div>
+
+    <!-- Lobby -->
+    <div id="screen-lobby" class="glass-panel p-6 rounded-2xl shadow-xl text-center">
+        <h2 class="text-xl font-bold mb-2">Sertai Kejohanan</h2>
+        <p class="text-sm text-slate-400 mb-6">Masukkan kod rahsia untuk Unit Pelepas dan Penamat bersambung.</p>
+        <input type="text" id="room-input" placeholder="Cth: SUKMA2026"
+            class="w-full bg-slate-950 border border-slate-700 text-center text-xl font-bold p-4 rounded-xl mb-4 text-white uppercase focus:border-blue-500 outline-none">
+        <button onclick="joinRoom()" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-4 rounded-xl shadow-lg active:scale-95 text-lg transition">MASUK SISTEM 🚀</button>
+    </div>
+
+    <!-- Pilih Mod -->
+    <div id="screen-mode" class="hidden grid grid-cols-2 gap-4 mb-6">
+        <button onclick="setMode('starter')" class="bg-slate-800 p-6 rounded-2xl font-bold hover:bg-slate-700 border-b-4 border-orange-500 transition active:scale-95">
+            <span class="text-3xl block mb-2">🔫</span> PELEPAS
+        </button>
+        <button onclick="setMode('finish')" class="bg-slate-800 p-6 rounded-2xl font-bold hover:bg-slate-700 border-b-4 border-blue-500 transition active:scale-95">
+            <span class="text-3xl block mb-2">🏁</span> PENAMAT
+        </button>
+    </div>
+
+    <!-- Starter -->
+    <div id="screen-starter" class="hidden text-center">
+        <div class="glass-panel p-6 rounded-2xl shadow-xl">
+            <h2 class="text-lg font-bold text-orange-500 uppercase tracking-widest mb-4 border-b border-slate-700 pb-2">Unit Pelepas</h2>
+            <button id="arm-btn" disabled class="w-full bg-slate-800 text-slate-500 font-black py-8 rounded-xl text-2xl tracking-widest cursor-not-allowed mb-4 border border-slate-700">SILA AKTIFKAN MIC</button>
+            <button onclick="resetSystem()" class="w-full bg-slate-700 hover:bg-slate-600 p-4 rounded-xl font-bold shadow-lg mb-6 transition">🔄 Reset Masa Kejohanan</button>
+            <div class="bg-slate-950 p-5 rounded-xl border border-slate-800 text-left">
+                <button id="test-mic-btn" onclick="startMic()" class="w-full text-sm bg-blue-600 hover:bg-blue-500 p-3 rounded-lg font-bold mb-4 transition">🎤 Aktifkan Mic</button>
+                <div class="flex justify-between text-xs mb-1 text-slate-400">
+                    <span>Tahap Bunyi: <span id="mic-level-text" class="text-white font-mono">0</span></span>
+                    <span>Threshold: <span id="threshold-val" class="font-bold text-orange-400">70</span></span>
+                </div>
+                <div class="w-full bg-slate-800 rounded-full h-3 mb-4 overflow-hidden">
+                    <div id="mic-level-bar" class="bg-orange-500 h-full w-0 transition-all duration-75"></div>
+                </div>
+                <input type="range" id="threshold-slider" min="10" max="150" value="70" class="w-full accent-orange-500">
+            </div>
+        </div>
+    </div>
+
+    <!-- Finish -->
+    <div id="screen-finish" class="hidden">
+        <div class="glass-panel p-4 rounded-2xl shadow-xl mb-4 relative">
+
+            <div class="absolute top-4 right-4 z-20">
+                <button onclick="toggleFullScreen()" class="bg-slate-800 text-slate-300 text-xs px-2 py-1 rounded border border-slate-600 hover:bg-slate-700">
+                    🖥️ <span id="fs-btn-text">Skrin Penuh</span>
+                </button>
+            </div>
+
+            <div id="stopwatch" class="text-6xl font-black text-center py-2 text-white font-mono mb-2 tracking-widest">
+                00:00<span class="text-3xl text-blue-400">.00</span>
+            </div>
+
+            <div class="relative w-full aspect-video bg-black rounded-xl overflow-hidden border border-slate-700 mb-4">
+                <video id="webcam" autoplay playsinline class="w-full h-full object-cover"></video>
+                <div class="finish-line"></div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-2 mb-4">
+                <button id="btn-record" onclick="toggleRecording()" class="bg-red-600 hover:bg-red-500 font-bold py-3 rounded-lg shadow-lg active:scale-95 transition text-white">🔴 MULA RAKAM</button>
+                <button onclick="stopRace()" class="bg-slate-700 hover:bg-slate-600 font-bold py-3 rounded-lg shadow-lg active:scale-95 transition text-white text-sm">⏹ HENTIKAN JAM</button>
+            </div>
+
+            <!-- FINISH AREA: Slit-Scan + Zoom -->
+            <div id="finish-area" class="hidden">
+                <p class="text-xs text-yellow-400 mb-2 font-bold text-center bg-yellow-900/30 p-2 rounded">
+                    🔍 Zoom in → gerak gambar → klik tepat pada dada pelari untuk tanda masa
+                </p>
+
+                <!-- Zoom Controls -->
+                <div class="zoom-bar mb-2">
+                    <button class="zbtn" onclick="adjustZoom(-0.5)" title="Zoom Out">−</button>
+                    <input type="range" id="zoom-slider" min="1" max="12" step="0.1" value="1" oninput="setZoomFromSlider(+this.value)">
+                    <button class="zbtn" onclick="adjustZoom(+0.5)" title="Zoom In">+</button>
+                    <span id="zoom-level-text">1.0×</span>
+                    <button class="zbtn" onclick="resetZoom()" style="font-size:12px;padding:0 6px;width:auto;" title="Reset">⟳</button>
+                    <button id="loupe-btn" class="loupe-btn" onclick="toggleLoupe()">🔍 Loupe</button>
+                </div>
+                <div class="zoom-tip">📱 Pinch 2 jari = zoom &nbsp;|&nbsp; 🖥️ Scroll wheel = zoom &nbsp;|&nbsp; Drag = gerak</div>
+
+                <!-- Canvas viewport -->
+                <div id="slit-outer" class="mt-2">
+                    <canvas id="slit-canvas"></canvas>
+                    <div id="loupe"><canvas id="loupe-canvas" width="150" height="150"></canvas></div>
+                </div>
+
+                <div class="zoom-status-bar mt-1">
+                    <span id="zoom-status">Zoom: 1.0×</span>
+                    <span id="coord-status" class="text-blue-400"></span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Keputusan -->
+        <div class="glass-panel rounded-2xl p-4 shadow-xl">
+            <div class="flex justify-between items-center mb-4 border-b border-slate-700 pb-2">
+                <h3 class="font-bold text-sm text-blue-400 uppercase tracking-widest">Keputusan Rasmi</h3>
+                <span id="result-count" class="text-xs bg-blue-900/50 text-blue-300 px-2 py-1 rounded-md font-bold">0</span>
+            </div>
+            <div class="overflow-x-auto max-h-64 overflow-y-auto mb-4 rounded-lg bg-slate-950 border border-slate-800">
+                <table class="w-full text-left text-sm whitespace-nowrap">
+                    <thead class="bg-slate-800 text-slate-400 text-xs uppercase sticky top-0">
+                        <tr>
+                            <th class="p-3">Kedudukan</th>
+                            <th class="p-2">Masa(s)</th>
+                            <th class="p-2 text-center">Buang</th>
+                        </tr>
+                    </thead>
+                    <tbody id="results-table">
+                        <tr><td colspan="3" class="text-center p-4 text-slate-600 italic">Klik gambar pelari untuk merekod.</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <button onclick="exportPDF()" class="w-full bg-white text-black font-black p-3 rounded-lg hover:bg-slate-200 transition text-sm tracking-widest">📄 MUAT TURUN PDF RASMI</button>
+        </div>
+    </div>
+
+</div>
+
+<script>
+// ════════════════════════════════════════════════════
+// 1. FIREBASE
+// ════════════════════════════════════════════════════
+const firebaseConfig = {
+    apiKey: "AIzaSyB6cOX9OoM6-Z2r7svyGUaMC7SzwJzpF5Q",
+    authDomain: "sprint-timer-v2.firebaseapp.com",
+    databaseURL: "https://sprint-timer-v2-default-rtdb.asia-southeast1.firebasedatabase.app",
+    projectId: "sprint-timer-v2",
+    storageBucket: "sprint-timer-v2.firebasestorage.app",
+    messagingSenderId: "490693241804",
+    appId: "1:490693241804:web:264ae3d32f2df78a9f8b69"
+};
+if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+
+// ════════════════════════════════════════════════════
+// 2. GLOBAL STATE
+// ════════════════════════════════════════════════════
+let currentRoom = '', startTime = null, isRaceStopped = true, serverOffset = 0;
+let isMicActive = false, audioContext, analyser, dataArray;
+let currentThreshold = 70, isArmed = false;
+let isRecording = false, reqRecord;
+
+const slitCanvas  = document.getElementById('slit-canvas');
+const slitCtx     = slitCanvas.getContext('2d', { willReadFrequently: true });
+let baseCanvas    = document.createElement('canvas');
+let baseCtx       = baseCanvas.getContext('2d', { willReadFrequently: true });
+let currentDrawX  = 0;
+const sliceWidth  = 4;
+let mapMasa       = [];
+let senaraiPenanda = [];
+let isFullScreen  = false;
+
+db.ref('.info/serverTimeOffset').on('value', s => { serverOffset = s.val() || 0; });
+
+// ════════════════════════════════════════════════════
+// 3. ZOOM & PAN ENGINE
+// ════════════════════════════════════════════════════
+let zl = 1.0;           // zoom level
+const ZL_MIN = 1.0, ZL_MAX = 12.0;
+let panX = 0, panY = 0; // pan dalam piksel skrin
+let isDragging = false, dragSX = 0, dragSY = 0, dragPX = 0, dragPY = 0;
+let isPinching = false, pinchDist0 = 0, pinchZoom0 = 1, pinchFX = 0, pinchFY = 0;
+let loupeOn = false;
+
+function getOuter() { return document.getElementById('slit-outer'); }
+
+function clampPan() {
+    const o = getOuter(); if (!o) return;
+    const maxX = Math.max(0, currentDrawX * zl - o.clientWidth);
+    const maxY = Math.max(0, slitCanvas.height * zl - o.clientHeight);
+    panX = Math.max(0, Math.min(panX, maxX));
+    panY = Math.max(0, Math.min(panY, maxY));
+}
+
+function applyTransform() {
+    clampPan();
+    slitCanvas.style.transform = `scale(${zl})`;
+    slitCanvas.style.left = -panX + 'px';
+    slitCanvas.style.top  = -panY + 'px';
+    document.getElementById('zoom-level-text').innerText = zl.toFixed(1) + '×';
+    document.getElementById('zoom-slider').value = zl;
+    document.getElementById('zoom-status').innerText = `Zoom: ${zl.toFixed(1)}× | ${isRecording ? 'Rakaman sedang berjalan...' : 'Klik untuk tanda masa'}`;
+}
+
+// Zoom dengan focal point (skrin koordinat relatif kepada outer)
+function zoomAt(newZl, fx, fy) {
+    newZl = Math.max(ZL_MIN, Math.min(ZL_MAX, newZl));
+    const cX = (fx + panX) / zl;  // canvas piksel sebelum
+    const cY = (fy + panY) / zl;
+    zl = newZl;
+    panX = cX * zl - fx;
+    panY = cY * zl - fy;
+    applyTransform();
+}
+
+function adjustZoom(delta) {
+    const o = getOuter();
+    const fx = o ? o.clientWidth / 2 : 0;
+    const fy = o ? o.clientHeight / 2 : 0;
+    zoomAt(zl + delta, fx, fy);
+}
+
+function setZoomFromSlider(v) {
+    const o = getOuter();
+    zoomAt(v, o ? o.clientWidth/2 : 0, o ? o.clientHeight/2 : 0);
+}
+
+function resetZoom() {
+    zl = 1.0; panX = 0; panY = 0; applyTransform();
+    // Auto-scroll ke hujung kanan
+    const o = getOuter();
+    if (o) { panX = Math.max(0, currentDrawX - o.clientWidth); applyTransform(); }
+}
+
+// ════════════════════════════════════════════════════
+// 4. LOUPE ENGINE
+// ════════════════════════════════════════════════════
+const LOUPE_SZ  = 150;
+const LOUPE_MAG = 5;    // 5× magnification dalam loupe
+
+function toggleLoupe() {
+    loupeOn = !loupeOn;
+    document.getElementById('loupe-btn').classList.toggle('on', loupeOn);
+    if (!loupeOn) document.getElementById('loupe').style.display = 'none';
+}
+
+function drawLoupe(clientX, clientY) {
+    if (!loupeOn || currentDrawX === 0) return;
+    const o = getOuter(); if (!o) return;
+    const rect = o.getBoundingClientRect();
+    const ox = clientX - rect.left;
+    const oy = clientY - rect.top;
+
+    // Koordinat canvas asal
+    const cX = (ox + panX) / zl;
+    const cY = (oy + panY) / zl;
+
+    // Berapa banyak piksel canvas yang dipaparkan dalam loupe
+    const half = LOUPE_SZ / (2 * LOUPE_MAG);
+
+    const lc = document.getElementById('loupe-canvas');
+    const lCtx = lc.getContext('2d');
+    lCtx.clearRect(0, 0, LOUPE_SZ, LOUPE_SZ);
+
+    // Latar gelap jika keluar sempadan
+    lCtx.fillStyle = '#000';
+    lCtx.fillRect(0, 0, LOUPE_SZ, LOUPE_SZ);
+
+    lCtx.drawImage(
+        baseCanvas,
+        cX - half, cY - half, half * 2, half * 2,
+        0, 0, LOUPE_SZ, LOUPE_SZ
+    );
+
+    // Tunjuk penanda dalam loupe
+    senaraiPenanda.forEach(m => {
+        const relX = (m.x - cX + half) * LOUPE_MAG;
+        lCtx.strokeStyle = '#ef4444';
+        lCtx.lineWidth = 1.5;
+        lCtx.beginPath(); lCtx.moveTo(relX, 0); lCtx.lineTo(relX, LOUPE_SZ); lCtx.stroke();
+    });
+
+    // Posisi loupe — elak terkeluar
+    const loupe = document.getElementById('loupe');
+    let lx = ox + 18, ly = oy - LOUPE_SZ - 18;
+    if (lx + LOUPE_SZ > o.clientWidth)  lx = ox - LOUPE_SZ - 18;
+    if (ly < 0)                          ly = oy + 18;
+    loupe.style.left = lx + 'px';
+    loupe.style.top  = ly + 'px';
+    loupe.style.display = 'block';
+
+    // Update koordinat status
+    const t = cariMasaTerdekat(cX);
+    document.getElementById('coord-status').innerText = t ? `⏱ ~${t}s` : '';
+}
+
+function hideLoupe() { document.getElementById('loupe').style.display = 'none'; document.getElementById('coord-status').innerText = ''; }
+
+// ════════════════════════════════════════════════════
+// 5. CANVAS EVENT LISTENERS
+// ════════════════════════════════════════════════════
+function initCanvasEvents() {
+    const o = document.getElementById('slit-outer');
+
+    // ── Scroll wheel zoom ──
+    o.addEventListener('wheel', e => {
+        e.preventDefault();
+        const rect = o.getBoundingClientRect();
+        zoomAt(zl + (e.deltaY < 0 ? 0.4 : -0.4), e.clientX - rect.left, e.clientY - rect.top);
+    }, { passive: false });
+
+    // ── Mouse drag + click ──
+    o.addEventListener('mousedown', e => {
+        if (e.button !== 0) return;
+        isDragging = true;
+        dragSX = e.clientX; dragSY = e.clientY;
+        dragPX = panX; dragPY = panY;
+        o.style.cursor = 'grabbing';
+    });
+    window.addEventListener('mousemove', e => {
+        if (isDragging) {
+            panX = dragPX - (e.clientX - dragSX);
+            panY = dragPY - (e.clientY - dragSY);
+            applyTransform();
+        }
+        if (loupeOn) drawLoupe(e.clientX, e.clientY);
+    });
+    window.addEventListener('mouseup', e => {
+        if (!isDragging) return;
+        const moved = Math.hypot(e.clientX - dragSX, e.clientY - dragSY) > 5;
+        isDragging = false;
+        o.style.cursor = 'crosshair';
+        if (!moved) handleTap(e.clientX, e.clientY);
+    });
+    o.addEventListener('mouseleave', hideLoupe);
+
+    // ── Touch drag + pinch ──
+    o.addEventListener('touchstart', e => {
+        e.preventDefault();
+        if (e.touches.length === 1) {
+            isDragging = true; isPinching = false;
+            dragSX = e.touches[0].clientX; dragSY = e.touches[0].clientY;
+            dragPX = panX; dragPY = panY;
+        } else if (e.touches.length === 2) {
+            isDragging = false; isPinching = true;
+            pinchDist0 = Math.hypot(e.touches[1].clientX - e.touches[0].clientX, e.touches[1].clientY - e.touches[0].clientY);
+            pinchZoom0 = zl;
+            const rect = o.getBoundingClientRect();
+            pinchFX = (e.touches[0].clientX + e.touches[1].clientX) / 2 - rect.left;
+            pinchFY = (e.touches[0].clientY + e.touches[1].clientY) / 2 - rect.top;
+        }
+    }, { passive: false });
+
+    o.addEventListener('touchmove', e => {
+        e.preventDefault();
+        if (e.touches.length === 1 && isDragging && !isPinching) {
+            panX = dragPX - (e.touches[0].clientX - dragSX);
+            panY = dragPY - (e.touches[0].clientY - dragSY);
+            applyTransform();
+            if (loupeOn) drawLoupe(e.touches[0].clientX, e.touches[0].clientY);
+        } else if (e.touches.length === 2 && isPinching) {
+            const d = Math.hypot(e.touches[1].clientX - e.touches[0].clientX, e.touches[1].clientY - e.touches[0].clientY);
+            zoomAt(pinchZoom0 * (d / pinchDist0), pinchFX, pinchFY);
+        }
+    }, { passive: false });
+
+    o.addEventListener('touchend', e => {
+        if (isPinching) {
+            isPinching = false;
+            if (e.touches.length === 1) {
+                isDragging = true;
+                dragSX = e.touches[0].clientX; dragSY = e.touches[0].clientY;
+                dragPX = panX; dragPY = panY;
+            }
+            return;
+        }
+        if (isDragging && e.changedTouches.length === 1) {
+            const moved = Math.hypot(e.changedTouches[0].clientX - dragSX, e.changedTouches[0].clientY - dragSY) > 8;
+            isDragging = false;
+            hideLoupe();
+            if (!moved) handleTap(e.changedTouches[0].clientX, e.changedTouches[0].clientY);
+        }
+    });
+}
+
+// ════════════════════════════════════════════════════
+// 6. TAP → TANDA MASA
+// ════════════════════════════════════════════════════
+function handleTap(clientX, clientY) {
+    if (isRecording) { showToast('⏸ Hentikan rakaman dahulu sebelum menanda!'); return; }
+    if (currentDrawX === 0) return;
+
+    const o = getOuter();
+    const rect = o.getBoundingClientRect();
+    const ox = clientX - rect.left;
+    const oy = clientY - rect.top;
+
+    // Tukar skrin → canvas asal
+    const cX = (ox + panX) / zl;
+
+    const t = cariMasaTerdekat(cX);
+    if (t !== null) {
+        senaraiPenanda.push({ x: cX, time: t });
+        redrawCanvas();
+        renderTable();
+        showToast(`✅ Masa ditanda: ${t}s`);
+    }
+}
+
+// ════════════════════════════════════════════════════
+// 7. PWA
+// ════════════════════════════════════════════════════
+let deferredPrompt = null;
+window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); deferredPrompt = e; setTimeout(() => document.getElementById('pwa-install-banner').classList.add('show'), 2000); });
+window.addEventListener('appinstalled', () => { deferredPrompt = null; closeBanner(); showToast('✅ Sprint Timer berjaya dipasang!'); });
+async function installPWA() {
+    if (!deferredPrompt) { showToast('Gunakan Chrome Android.'); return; }
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    deferredPrompt = null; closeBanner();
+    if (outcome === 'accepted') showToast('⏳ Memasang...');
+}
+function closeBanner() { document.getElementById('pwa-install-banner').classList.remove('show'); }
+function showToast(msg, dur = 2500) {
+    const t = document.getElementById('toast');
+    t.innerText = msg; t.style.display = 'block';
+    clearTimeout(t._t); t._t = setTimeout(() => t.style.display = 'none', dur);
+}
+
+// ════════════════════════════════════════════════════
+// 8. UI NAVIGASI
+// ════════════════════════════════════════════════════
+function joinRoom() {
+    const v = document.getElementById('room-input').value.trim().toUpperCase();
+    if (!v) return alert('Sila masukkan kod!');
+    currentRoom = v.replace(/\s+/g,'');
+    document.getElementById('screen-lobby').classList.add('hidden');
+    document.getElementById('screen-mode').classList.remove('hidden');
+    document.getElementById('btn-change-room').classList.remove('hidden');
+    document.getElementById('room-badge').classList.remove('hidden');
+    document.getElementById('display-room-id').innerText = currentRoom;
+}
+function setMode(mode) {
+    document.getElementById('screen-mode').classList.add('hidden');
+    if (mode === 'starter') {
+        document.getElementById('screen-starter').classList.remove('hidden');
+    } else {
+        document.getElementById('screen-finish').classList.remove('hidden');
+        initCamera(); listenToFirebaseStart();
+        setTimeout(initCanvasEvents, 150);
+    }
+}
+function toggleFullScreen() {
+    if (!document.fullscreenElement) document.documentElement.requestFullscreen().catch(()=>{});
+    else document.exitFullscreen();
+}
+document.addEventListener('fullscreenchange', () => {
+    isFullScreen = !!document.fullscreenElement;
+    const c = document.getElementById('app-container');
+    const sw = document.getElementById('stopwatch');
+    const o = getOuter();
+    if (isFullScreen) {
+        c.classList.replace('max-w-md','max-w-6xl');
+        sw.classList.replace('text-6xl','text-8xl');
+        document.getElementById('fs-btn-text').innerText = 'Keluar Penuh';
+        if (o) o.style.height = '450px';
+    } else {
+        c.classList.replace('max-w-6xl','max-w-md');
+        sw.classList.replace('text-8xl','text-6xl');
+        document.getElementById('fs-btn-text').innerText = 'Skrin Penuh';
+        if (o) o.style.height = '260px';
+    }
+    redrawCanvas(); applyTransform();
+});
+
+// ════════════════════════════════════════════════════
+// 9. MIC / PELEPAS
+// ════════════════════════════════════════════════════
+document.getElementById('threshold-slider').addEventListener('input', e => {
+    currentThreshold = +e.target.value;
+    document.getElementById('threshold-val').innerText = currentThreshold;
+});
+async function startMic() {
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        const src = audioContext.createMediaStreamSource(stream);
+        analyser = audioContext.createAnalyser(); analyser.fftSize = 256;
+        src.connect(analyser);
+        dataArray = new Uint8Array(analyser.frequencyBinCount);
+        isMicActive = true;
+        const btn = document.getElementById('arm-btn');
+        btn.disabled = false; btn.innerText = 'SEDIA (ARM)';
+        btn.className = 'w-full bg-orange-600 hover:bg-orange-500 text-white font-black py-8 rounded-xl text-2xl tracking-widest shadow-lg active:scale-95 transition mb-4';
+        btn.onclick = toggleArm; monitorAudio();
+    } catch(e) { alert('Mic Gagal: ' + e.message); }
+}
+function toggleArm() {
+    isArmed = !isArmed;
+    const btn = document.getElementById('arm-btn');
+    if (isArmed) {
+        btn.innerHTML = '<span class="animate-pulse">🔴 MENANTI PISTOL...</span>';
+        btn.className = 'w-full bg-red-600 text-white font-black py-8 rounded-xl text-2xl tracking-widest shadow-lg mb-4';
+    } else {
+        btn.innerText = 'SEDIA (ARM)';
+        btn.className = 'w-full bg-orange-600 hover:bg-orange-500 text-white font-black py-8 rounded-xl text-2xl tracking-widest shadow-lg active:scale-95 transition mb-4';
+    }
+}
+function monitorAudio() {
+    if (!isMicActive) return;
+    analyser.getByteFrequencyData(dataArray);
+    const vol = dataArray.reduce((a,b) => a+b) / dataArray.length;
+    document.getElementById('mic-level-text').innerText = Math.floor(vol);
+    document.getElementById('mic-level-bar').style.width = Math.min((vol/150)*100, 100) + '%';
+    if (isArmed && vol > currentThreshold) {
+        isArmed = false;
+        db.ref(`race/${currentRoom}/start`).set({ timestamp: firebase.database.ServerValue.TIMESTAMP })
+          .catch(e => alert('Gagal: ' + e.message));
+        const btn = document.getElementById('arm-btn');
+        btn.innerText = 'BAM! (MASA BERJALAN)';
+        btn.className = 'w-full bg-slate-800 text-emerald-400 border border-emerald-500 font-black py-8 rounded-xl text-2xl tracking-widest mb-4';
+    }
+    requestAnimationFrame(monitorAudio);
+}
+function resetSystem() {
+    if (!confirm('Padam rekod larian semasa?')) return;
+    db.ref(`race/${currentRoom}/start`).remove();
+    isArmed = false;
+    if (isMicActive) {
+        const btn = document.getElementById('arm-btn');
+        btn.innerText = 'SEDIA (ARM)';
+        btn.className = 'w-full bg-orange-600 hover:bg-orange-500 text-white font-black py-8 rounded-xl text-2xl tracking-widest mb-4';
+    }
+}
+
+// ════════════════════════════════════════════════════
+// 10. KAMERA & STOPWATCH
+// ════════════════════════════════════════════════════
+async function initCamera() {
+    try {
+        const s = await navigator.mediaDevices.getUserMedia({ video: { facingMode:'environment', width:{ideal:1280}, height:{ideal:720} } });
+        document.getElementById('webcam').srcObject = s;
+    } catch(e) { alert('Kamera Gagal: ' + e.message); }
+}
+function listenToFirebaseStart() {
+    db.ref(`race/${currentRoom}/start`).on('value', snap => {
+        const data = snap.val();
+        if (data && data.timestamp) {
+            startTime = data.timestamp; isRaceStopped = false;
+            requestAnimationFrame(updateStopwatchUI);
+        } else {
+            startTime = null; isRaceStopped = true;
+            const ms = isFullScreen ? 'text-6xl' : 'text-3xl';
+            document.getElementById('stopwatch').innerHTML = `00:00<span class="${ms} text-blue-400">.00</span>`;
+            if (isRecording) stopRace();
+            currentDrawX = 0; mapMasa = []; senaraiPenanda = [];
+            renderTable();
+            document.getElementById('finish-area').classList.add('hidden');
+            zl = 1; panX = 0; panY = 0; applyTransform();
+        }
+    }, () => alert('Gagal bersambung ke Firebase.'));
+}
+function updateStopwatchUI() {
+    if (!startTime || isRaceStopped) return;
+    const diff = Math.max(0, (Date.now() + serverOffset - startTime) / 1000);
+    const m  = Math.floor(diff/60).toString().padStart(2,'0');
+    const s  = Math.floor(diff%60).toString().padStart(2,'0');
+    const ms = Math.floor((diff%1)*100).toString().padStart(2,'0');
+    const msS = isFullScreen ? 'text-6xl' : 'text-3xl';
+    document.getElementById('stopwatch').innerHTML = `${m==='00'?'':m+':'}${s}<span class="${msS} text-blue-400">.${ms}</span>`;
+    requestAnimationFrame(updateStopwatchUI);
+}
+
+// ════════════════════════════════════════════════════
+// 11. SLIT-SCAN ENGINE
+// ════════════════════════════════════════════════════
+function toggleRecording() {
+    if (!startTime) return showToast('⚠️ Tunggu tembakan pelepas dahulu!');
+    const btn = document.getElementById('btn-record');
+    if (!isRecording) {
+        isRecording = true;
+        const v = document.getElementById('webcam');
+        baseCanvas.height = slitCanvas.height = v.videoHeight || 480;
+        baseCanvas.width  = slitCanvas.width  = 3000;
+        currentDrawX = 0; mapMasa = []; senaraiPenanda = [];
+        zl = 1; panX = 0; panY = 0;
+        renderTable();
+        document.getElementById('finish-area').classList.remove('hidden');
+        btn.innerHTML = 'MEREKOD GAMBAR...';
+        btn.className = 'w-full bg-slate-800 text-red-500 font-bold py-3 rounded-lg border border-slate-700 shadow-inner active:scale-95 transition cursor-pointer';
+        captureSlitLoop();
+    }
+}
+function captureSlitLoop() {
+    if (!isRecording || isRaceStopped) return;
+    const v = document.getElementById('webcam');
+    if (v.videoWidth === 0) { reqRecord = requestAnimationFrame(captureSlitLoop); return; }
+
+    if (currentDrawX + sliceWidth >= baseCanvas.width) {
+        const tmp = document.createElement('canvas');
+        tmp.width = baseCanvas.width; tmp.height = baseCanvas.height;
+        tmp.getContext('2d').drawImage(baseCanvas, 0, 0);
+        baseCanvas.width += 1500; slitCanvas.width += 1500;
+        baseCtx.drawImage(tmp, 0, 0);
+    }
+
+    const diff = Math.max(0, (Date.now() + serverOffset - startTime) / 1000);
+    const cx = Math.floor(v.videoWidth / 2);
+    baseCtx.drawImage(v, cx - sliceWidth/2, 0, sliceWidth, v.videoHeight, currentDrawX, 0, sliceWidth, baseCanvas.height);
+    mapMasa.push({ x: currentDrawX, time: diff.toFixed(2) });
+    currentDrawX += sliceWidth;
+    redrawCanvas();
+
+    // Auto-scroll ke hujung semasa rakaman (jika zoom rendah)
+    if (zl <= 1.5) {
+        const o = getOuter();
+        if (o) { panX = Math.max(0, currentDrawX * zl - o.clientWidth); applyTransform(); }
+    }
+    reqRecord = requestAnimationFrame(captureSlitLoop);
+}
+function stopRace() {
+    isRaceStopped = true;
+    cancelAnimationFrame(reqRecord);
+    if (isRecording) {
+        isRecording = false;
+        const btn = document.getElementById('btn-record');
+        btn.innerHTML = '🔴 MULA RAKAM (Sambung Rakam)';
+        btn.className = 'bg-red-600 hover:bg-red-500 font-bold py-3 rounded-lg shadow-lg active:scale-95 transition text-white w-full';
+        showToast('⏹ Selesai. Zoom & klik untuk tanda masa pelari.');
+    }
+}
+
+// ════════════════════════════════════════════════════
+// 12. CARI MASA & REDRAW
+// ════════════════════════════════════════════════════
+function cariMasaTerdekat(targetX) {
+    if (mapMasa.length === 0) return null;
+    let closest = mapMasa[0];
+    let minD = Math.abs(targetX - closest.x);
+    for (let i = 1; i < mapMasa.length; i++) {
+        const d = Math.abs(targetX - mapMasa[i].x);
+        if (d < minD) { minD = d; closest = mapMasa[i]; }
+    }
+    return closest.time;
+}
+
+function redrawCanvas() {
+    slitCanvas.width  = currentDrawX;
+    slitCanvas.height = baseCanvas.height;
+    slitCtx.clearRect(0, 0, slitCanvas.width, slitCanvas.height);
+    if (currentDrawX > 0) slitCtx.drawImage(baseCanvas, 0, 0, currentDrawX, baseCanvas.height, 0, 0, currentDrawX, slitCanvas.height);
+
+    senaraiPenanda.forEach(m => {
+        // Garis
+        slitCtx.strokeStyle = '#ef4444';
+        slitCtx.lineWidth = 2;
+        slitCtx.setLineDash([6, 3]);
+        slitCtx.beginPath(); slitCtx.moveTo(m.x, 0); slitCtx.lineTo(m.x, slitCanvas.height); slitCtx.stroke();
+        slitCtx.setLineDash([]);
+
+        // Label
+        const lw = 68, lh = 24;
+        slitCtx.fillStyle = 'rgba(0,0,0,0.88)';
+        slitCtx.beginPath();
+        if (slitCtx.roundRect) slitCtx.roundRect(m.x - lw/2, 6, lw, lh, 4);
+        else slitCtx.rect(m.x - lw/2, 6, lw, lh);
+        slitCtx.fill();
+        slitCtx.fillStyle = '#facc15';
+        slitCtx.font = 'bold 13px monospace';
+        slitCtx.textAlign = 'center';
+        slitCtx.fillText(m.time + 's', m.x, 22);
+
+        // Dot bawah
+        slitCtx.fillStyle = '#ef4444';
+        slitCtx.beginPath(); slitCtx.arc(m.x, slitCanvas.height - 6, 4, 0, Math.PI*2); slitCtx.fill();
+    });
+}
+
+// ════════════════════════════════════════════════════
+// 13. JADUAL & PDF
+// ════════════════════════════════════════════════════
+function buangPenanda(i) { senaraiPenanda.splice(i,1); redrawCanvas(); renderTable(); }
+function renderTable() {
+    const tbody = document.getElementById('results-table');
+    document.getElementById('result-count').innerText = senaraiPenanda.length;
+    if (!senaraiPenanda.length) {
+        tbody.innerHTML = '<tr><td colspan="3" class="text-center p-4 text-slate-600 italic">Klik gambar pelari untuk merekod.</td></tr>';
+        return;
+    }
+    const sorted = [...senaraiPenanda].map((m,i) => ({...m,oi:i})).sort((a,b) => +a.time - +b.time);
+    tbody.innerHTML = sorted.map((m,i) => `
+        <tr class="border-b border-slate-800 bg-slate-900 hover:bg-slate-800 transition">
+            <td class="p-3 font-bold text-blue-400">#${i+1}</td>
+            <td class="p-2 font-mono font-black text-xl text-white">${m.time}s</td>
+            <td class="p-2 text-center">
+                <button onclick="buangPenanda(${m.oi})" class="bg-red-500/20 text-red-500 hover:bg-red-500 hover:text-white px-3 py-1 rounded text-xs font-bold transition">BUANG</button>
+            </td>
+        </tr>`).join('');
+}
+async function exportPDF() {
+    if (!senaraiPenanda.length) return alert('Tiada keputusan.');
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    const sorted = [...senaraiPenanda].sort((a,b) => +a.time - +b.time);
+    doc.setFont('helvetica','bold'); doc.setFontSize(22); doc.text('KEPUTUSAN RASMI LARIAN', 10, 20);
+    doc.setFontSize(11); doc.setFont('helvetica','normal'); doc.setTextColor(100,100,100);
+    doc.text(`KOD BILIK: ${currentRoom} | DICETAK: ${new Date().toLocaleString('ms-MY')}`, 10, 28);
+    doc.setDrawColor(200,200,200); doc.line(10,32,200,32);
+    let y = 45;
+    sorted.forEach((m,i) => {
+        if (y > 260) { doc.addPage(); y = 20; }
+        doc.setTextColor(0,0,0); doc.setFontSize(14); doc.setFont('helvetica','bold');
+        doc.text(`Tempat Ke-${i+1}`, 15, y+5);
+        doc.setFontSize(18); doc.setTextColor(220,38,38);
+        doc.text(`${m.time} s`, 15, y+15);
+        const cropW = 200, sx = Math.max(0, m.x - cropW/2);
+        const dw = Math.min(cropW, currentDrawX - sx);
+        const pc = document.createElement('canvas'); pc.width = dw; pc.height = baseCanvas.height;
+        const pCtx = pc.getContext('2d');
+        pCtx.drawImage(baseCanvas, sx, 0, dw, baseCanvas.height, 0, 0, dw, pc.height);
+        const lx = m.x - sx;
+        pCtx.strokeStyle = 'red'; pCtx.lineWidth = 3;
+        pCtx.beginPath(); pCtx.moveTo(lx,0); pCtx.lineTo(lx,pc.height); pCtx.stroke();
+        doc.setDrawColor(150,150,150); doc.rect(70,y-5,80,45);
+        doc.addImage(pc.toDataURL('image/jpeg',0.85),'JPEG',70,y-5,80,45);
+        y += 55;
+        if (i < sorted.length-1) { doc.setDrawColor(230,230,230); doc.line(15,y-5,195,y-5); }
+    });
+    doc.save(`Keputusan_Larian_${currentRoom}.pdf`);
+}
+
+// ════════════════════════════════════════════════════
+// 14. SERVICE WORKER
+// ════════════════════════════════════════════════════
+if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js')
+          .then(reg => reg.addEventListener('updatefound', () => {
+              const nw = reg.installing;
+              nw.addEventListener('statechange', () => {
+                  if (nw.state === 'installed' && navigator.serviceWorker.controller)
+                      showToast('🔄 Versi baru! Muat semula untuk kemaskini.');
+              });
+          }))
+          .catch(e => console.log('SW gagal:', e));
+    });
+}
+</script>
+</body>
+</html>
